@@ -71,6 +71,12 @@ func (c *Camera) startNightCamera() (io.ReadCloser, *exec.Cmd) {
 func (c *Camera) Start(caster *broker.Broker) {
 	c.CameraNightMode = make(chan bool)
 
+	if *c.Rotation == 90 || *c.Rotation == 270 {
+		t := *c.Width
+		*c.Width = *c.Height
+		*c.Height = t
+	}
+
 	nalDelimiter := []byte{0, 0, 0, 1}
 	searchLen := len(nalDelimiter)
 	splitFunc := func(data []byte, atEOF bool) (advance int, token []byte, err error) {

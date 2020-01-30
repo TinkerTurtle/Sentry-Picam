@@ -45,11 +45,15 @@ func initClientVideo(ws *websocket.Conn) {
 		Width  int    `json:"width"`
 		Height int    `json:"height"`
 	}
-	message, err := json.Marshal(initVideo{
-		Action: "init",
-		Height: *camera.Height,
-		Width:  *camera.Width,
-	})
+
+	settings := initVideo{
+		"init",
+		*camera.Width,
+		*camera.Height,
+	}
+
+	message, err := json.Marshal(settings)
+
 	log.Println("Initializing client with: " + string(message))
 	h.CheckError(err)
 
