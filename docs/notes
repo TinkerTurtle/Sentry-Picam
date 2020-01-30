@@ -1,0 +1,15 @@
+errorStatus, nal_ref_idc (ref field, frame or picture), nal_unit_type
+
+27
+0 01 00111  sequence parameter set
+
+28
+0 01 01000  picture parameter set
+
+25
+0 01 00101  IDR
+
+21
+0 01 00001  non-IDR
+
+raspivid generates NAL units in this order: SPS, PPS, IDR, non-IDR...
