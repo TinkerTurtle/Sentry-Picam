@@ -1,124 +1,96 @@
-<html>
-  <head>
-    <title>Camera</title>
-    <style>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Camera</title>
+  <style>
     body {
       background-color: black;
       font-family: sans-serif;
+      color: white;
     }
+
     #status {
       background-color: black;
-      color: white;
       border: 1px solid black;
       padding: 4px;
       font-weight: bold;
     }
-    </style>
-  </head>
-  <body>
-    <button type="button" id="btn_connect" style="display: none">Watch Stream</button>
-    <button type="button" id="btn_disconnect" onclick="wsavc.stopStream()">Disconnect</button>
-    <button type="button" id="btn_modeDay" onclick="wsavc.signal('DAYMODE')">Day mode</button>
-    <button type="button" id="btn_modeNight" onclick="wsavc.signal('NIGHTMODE')">Night mode</button>
-    <span id="status"></span>
-    <br/>
-
-  <!-- provide WSAvcPlayer -->
-    <script type="text/javascript" src="http-live-player.js"></script>
-    <script type="text/javascript">
-
-var canvas = document.createElement("canvas");
-document.body.appendChild(canvas);
-var navHeight = 36;
-
-window.addEventListener('resize', function() {
-    var clientWidth = document.querySelector('html').clientWidth - 1;
-    var clientHeight = window.innerHeight - navHeight - 1;
-    var leftOffset = -(canvas.width - clientWidth) / 2;
-    var scalingFactor = 1;
-    canvas.style.position = "absolute";
-    if(canvas.width > clientWidth) {
-        scalingFactor = 1 / (canvas.width / clientWidth);
-        canvas.style.transform = 'scale(' + scalingFactor + ')';
-        canvas.style.left = leftOffset;
-        canvas.style.top = navHeight + (leftOffset / canvas.width) * canvas.height;
+  </style>
+  <script src="js/Broadway/Decoder.js"></script>
+  <script src="js/Broadway/YUVCanvas.js"></script>
+  <script src="js/Broadway/Player.js"></script>
+  <script src="js/Wakelock/wakelock.js"></script>
+  <script src="js/simple-webcam.js"></script>
+  <script>
+    function $(fn) {
+      if (document.readyState != 'loading') {
+        fn();
+      } else {
+        document.addEventListener('DOMContentLoaded', fn);
+      }
     }
-    if(canvas.height * scalingFactor > clientHeight) {
-        scalingFactor = 1 / (canvas.height / clientHeight);
-        canvas.style.transform = 'scale(' + scalingFactor + ')';
-        canvas.style.top = navHeight + -(canvas.height - clientHeight) / 2;
+
+    var wakeLock = Wakelock(function () {
+      document.querySelector('#status').innerHTML = "";
+    });
+    var wakeLockNotice = '<span style="color: red">NOTICE</span>: Click or touch anywhere to keep the screen on';
+
+    function showCameraConnected() {
+      document.querySelector('body').style.backgroundColor = 'black';
+      document.title = 'Camera';
+      document.querySelector('#btn_connect').style.display = 'none';
+      document.querySelector('#btn_disconnect').style.display = 'inline';
     }
-});
 
-function showCameraConnected() {
-  document.querySelector('body').style.backgroundColor = 'black';
-  document.title = 'Camera';
-  document.querySelector('#btn_connect').style.display = 'none';
-  document.querySelector('#btn_disconnect').style.display = 'inline';
-}
+    function monitorStream() {
+      var lastPktNum = cam.getTick();
+      window.setInterval(function () {
+        if (lastPktNum != cam.getTick()) {
+          lastPktNum = cam.getTick();
 
-// Create h264 player
-var cameraConnected = false;
-var uri = "ws://" + document.location.host + "/ws";
-var wsavc = new WSAvcPlayer(canvas, "webgl", 1, 35);
-wsavc.connect(uri);
-//expose instance for button callbacks
-window.wsavc = wsavc;
-
-document.querySelector('#btn_connect').addEventListener('click', function() {
-    if(!wsavc.running) {
-        wsavc.connect(uri);
-    }
-    else {
-        wsavc.playStream();
-    }
-    showCameraConnected();
-});
-
-var lastPktNum = wsavc.pktnum;
-window.setInterval(function() {
-    if(lastPktNum != wsavc.pktnum) {
-        lastPktNum = wsavc.pktnum;
-
-        if(!wakeLock) {
-          document.querySelector('#status').innerHTML = '<span style="color: red">NOTICE</span>: Click or touch anywhere to keep the screen on';
+          if (!cameraConnected) {
+            showCameraConnected();
+            cameraConnected = true;
+          }
         }
         else {
-          document.querySelector('#status').innerHTML = "";
+          cameraConnected = false;
+          document.querySelector('body').style.backgroundColor = '#d18c2c';
+          document.title = 'DISCONNECTED - Camera';
+          document.querySelector('#status').innerHTML = "Connection interrupted";
+          document.querySelector('#btn_connect').style.display = 'inline';
+          document.querySelector('#btn_disconnect').style.display = 'none';
         }
-        if(!cameraConnected) {
-          showCameraConnected();
-          cameraConnected = true;
-        }
+      }, 2000);
     }
-    else {
-        cameraConnected = false;
-        document.querySelector('body').style.backgroundColor = 'red';
-        document.title = 'DISCONNECTED - Camera';
-        document.querySelector('#status').innerHTML = "Connection interrupted";
-        document.querySelector('#btn_connect').style.display = 'inline';
-        document.querySelector('#btn_disconnect').style.display = 'none';
-    }
-}, 2000);
 
-function enableWakelock() {
-  if(!wakeLock) {
-    wakeLock = true;
-    document.querySelector('video').play();
-    document.querySelector('#status').innerHTML = "";
+    var cam;
+    $(function () {
+      document.querySelector('#status').innerHTML = wakeLockNotice;
+      var cameraConnected = false;
 
-    document.removeEventListener('click', enableWakelock);
-    document.removeEventListener('touchstart', enableWakelock);
-  }
-}
+      //var host = location.hostname + ":8080";
+      var host = "192.168.1.112:8080"
+      cam = new SimpleWebcam("videoContainer", 'ws://' + host + "/ws");
 
-var wakeLock = false;
-document.addEventListener('click', enableWakelock);
-document.addEventListener('touchstart', enableWakelock);
+      monitorStream();
+    });
+  </script>
+</head>
 
-    </script>
-    <video loop>
-      <source src="wakelock.webm" type="video/mp4" />
-    </video>
-  </body>
+<body>
+  <button type="button" id="btn_connect" style="display: none" disabled="disabled">Reload to reconnect</button>
+  <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'})">Day mode</button>
+  <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'})">Night mode</button>
+  <span id="status"></span>
+  <br />
+
+  <div id="videoContainer"></div>
+
+  <video loop>
+    <source src="wakelock.webm" type="video/mp4" />
+  </video>
+</body>
+
 </html>

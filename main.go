@@ -164,8 +164,8 @@ func main() {
 
 	// start broadcaster and camera
 	caster := broker.New()
-	go camera.Start(caster)
 	go caster.Start()
+	go camera.Start(caster)
 
 	// setup web services
 	exDir, _ := os.Executable()

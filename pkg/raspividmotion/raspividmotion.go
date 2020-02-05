@@ -5,7 +5,21 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"simple-webcam/broker"
 )
+
+const ignoreFirstFrames = 10 // give camera's autoexposure some time to settle
+// Motion stores configuration parameters and forms the basis for Detect
+type Motion struct {
+	Width          int
+	Height         int
+	NumAvgFrames   int
+	SenseThreshold int8
+	BlockWidth     int
+	Protocol       string
+	ListenPort     string
+}
 
 type motionVector struct {
 	X   int8
@@ -42,7 +56,7 @@ func (mV *mVhelper) reset() {
 	mV.SAD = 0
 }
 
-func buildFrameAvgDiff(buf *[]motionVector, numBlocks int) {
+func reportFrameAvgDiff(buf *[]motionVector, numBlocks int) {
 	var totalSAD, totalX, totalY int32
 	var maxSAD int16
 	var maxX, maxY int8
@@ -68,13 +82,14 @@ func buildFrameAvgDiff(buf *[]motionVector, numBlocks int) {
 		totalY/int32(numBlocks), maxY)
 }
 
-// buildAvgBlock takes a blockSize * blockSize average of macroblocks from buf and stores it into frame
-func buildAvgBlocks(frame *[]motionVector, buf *[]motionVector, blockSize int) {
-	rowCount := height / 16
-	colCount := (width + 16) / 16
+// buildAvgBlock takes a blockWidth * blockWidth average of macroblocks from buf and stores the
+// condensed result into frame
+func (c *Motion) buildAvgBlocks(frame *[]motionVector, buf *[]motionVector) {
+	rowCount := c.Height / 16
+	colCount := (c.Width + 16) / 16
 	usableCols := colCount - 1
 
-	mV := make([]mVhelper, usableCols/blockSize)
+	mV := make([]mVhelper, usableCols/c.BlockWidth)
 	i := 0
 	compressedIndex := 0
 
@@ -85,14 +100,14 @@ func buildAvgBlocks(frame *[]motionVector, buf *[]motionVector, blockSize int) {
 			if y < usableCols {
 				mV[blkIndex].add((*buf)[i])
 			}
-			if blk == blockSize {
+			if blk == c.BlockWidth {
 				blk = 0
 				blkIndex++
 			}
 			blk++
 			i++
 		}
-		if x%blockSize == 0 {
+		if x%c.BlockWidth == 0 {
 			for idx, v := range mV {
 				(*frame)[compressedIndex] = v.getAvg()
 				mV[idx].reset()
@@ -109,99 +124,170 @@ func abs(x int8) int8 {
 	return x
 }
 
-func findTemporalAverage(frameAvg *[]motionVector, frameHistory *[][]motionVector, frame []motionVector, numAvgFrames int, sensitivity int8) {
+// findTemporalAverage examines the past numFrames and stores the average to frameAvg
+func (c *Motion) findTemporalAverage(frameAvg *[]motionVector, frameHistory *[][]motionVector, currFrame *[]motionVector) {
 	var mV mVhelper
 
-	if len(*frameHistory) >= numAvgFrames {
-		for i := 0; i < len(frame); i++ {
-			for j := 0; j < numAvgFrames; j++ {
+	if len(*frameHistory) >= c.NumAvgFrames {
+		for i := 0; i < len(*currFrame); i++ {
+			for j := 0; j < c.NumAvgFrames; j++ {
 				mV.add((*frameHistory)[j][i])
 			}
 			(*frameAvg)[i] = mV.getAvg()
 			mV.reset()
 		}
 		*frameHistory = (*frameHistory)[1:] // slice off oldest frame
-
-		c := 0
-		for i, v := range *frameAvg {
-			c++
-			if abs(v.X-frame[i].X) > sensitivity {
-				fmt.Print("X")
-			} else {
-				fmt.Print(".")
-			}
-			if c > 19 {
-				fmt.Println()
-				c = 0
-			}
-		}
-		buildFrameAvgDiff(frameAvg, len(*frameAvg))
-		buildFrameAvgDiff(&frame, len(frame))
 	}
-	var f2 = make([]motionVector, len(frame))
-	copy(f2, frame)
+	var f2 = make([]motionVector, len(*currFrame))
+	copy(f2, *currFrame)
 	*frameHistory = append(*frameHistory, f2)
 }
 
-var width, height int
-
-func main() {
-	width = 1280
-	height = 960
-	numAvgFrames := 5            // use number of frames to find average
-	sensitivity := int8(2)       // lower # is more sensitive
-	const ignoreFirstFrames = 10 // give camera's autoexposure some time to settle
-	//sockAddr := "/dev/shm/simple-webcam.sock"
-	//l, err := net.Listen("unix", sockAddr)
-	sockAddr := ":9000"
-	l, err := net.Listen("tcp", sockAddr)
+// listen starts listening for raspivid's output of motion vectors
+func listen(network string, sockAddr string) net.Conn {
+	l, err := net.Listen(network, sockAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer l.Close()
 
 	// Wait for a connection.
-	log.Println("Waiting...")
 	conn, err := l.Accept()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Connected.")
 
-	//f, _ := os.Create("motion.vec")
-	numMacroblocks := ((width + 16) / 16) * (height / 16) // the right-most column is padding?
-	numUsableMacroblocks := (width / 16) * (height / 16)
-	sizeMacroX := width / 16
-	sizeMacroY := height / 16
-	//numMacroblocks := (width / 16) * (height / 16) // number of macroblocks in frame
+	return conn
+}
+
+func (c *Motion) getMaxBlockWidth() {
+	sizeMacroX := c.Width / 16
+	sizeMacroY := c.Height / 16
 
 	// split frame into larger zones, find largest factor
 	simpFactor := 0
 	for ((sizeMacroX/(1<<simpFactor))%2 == 0) && ((sizeMacroY/(1<<simpFactor))%2 == 0) {
 		simpFactor++
 	}
-	blockSize := 1 << simpFactor // largest block width
+	blockWidth := 1 << simpFactor // largest block width
+
+	if c.BlockWidth != 0 {
+		blockWidth = c.BlockWidth
+	}
+	c.BlockWidth = blockWidth
+}
+
+func (c *Motion) reportChanges(frameAvg *[]motionVector, currFrame *[]motionVector) {
+	pRowIdx := 0
+	for i, v := range *frameAvg {
+		pRowIdx++
+		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold || abs(v.Y-(*currFrame)[i].Y) > c.SenseThreshold {
+			fmt.Print("X")
+		} else {
+			fmt.Print(".")
+		}
+		if pRowIdx > 19 {
+			fmt.Println()
+			pRowIdx = 0
+		}
+	}
+	reportFrameAvgDiff(frameAvg, len(*frameAvg))
+	reportFrameAvgDiff(currFrame, len(*currFrame))
+}
+
+func (c *Motion) init() {
+	if c.Width == 0 || c.Height == 0 {
+		c.Width = 1280
+		c.Height = 960
+	}
+
+	if c.NumAvgFrames == 0 {
+		c.NumAvgFrames = 5
+	}
+
+	if c.SenseThreshold == 0 {
+		c.SenseThreshold = 6
+	}
+
+	if c.Protocol == "" || c.ListenPort == "" {
+		c.Protocol = "tcp"
+		c.ListenPort = ":9000"
+	}
+}
+
+func (c *Motion) publish(caster *broker.Broker, frameAvg *[]motionVector, currFrame *[]motionVector) {
+	out := ""
+	pRowIdx := 0
+	for i, v := range *frameAvg {
+		pRowIdx++
+		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold || abs(v.Y-(*currFrame)[i].Y) > c.SenseThreshold {
+			out += "X"
+		} else {
+			out += "."
+		}
+		if pRowIdx > 19 {
+			out += "\n"
+			pRowIdx = 0
+		}
+	}
+	reportFrameAvgDiff(frameAvg, len(*frameAvg))
+	reportFrameAvgDiff(currFrame, len(*currFrame))
+	caster.Publish(out)
+}
+
+// Detect motion by comparing the most recent frame with an average of the past numFrames.
+// Lower senseThreshold value increases the sensitivity to motion.
+func (c *Motion) Detect(caster *broker.Broker) {
+	c.init()
+	conn := listen(c.Protocol, c.ListenPort)
+
+	//f, _ := os.Create("motion.vec")
+	numMacroblocks := ((c.Width + 16) / 16) * (c.Height / 16) // the right-most column is padding?
+	numUsableMacroblocks := (c.Width / 16) * (c.Height / 16)
+
+	c.getMaxBlockWidth()
 
 	buffer := make([]motionVector, numMacroblocks)
-	vectorBlocks := make([]motionVector, numUsableMacroblocks/(blockSize*blockSize))
-	vectorAvgBlocks := make([]motionVector, numUsableMacroblocks/(blockSize*blockSize))
-	vectorHistory := make([][]motionVector, 0, numAvgFrames)
+	currVectorBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
+	vectorAvgBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
+	vectorHistory := make([][]motionVector, 0, c.NumAvgFrames)
 	ignoredFrames := 0
 	for {
 		err := binary.Read(conn, binary.LittleEndian, &buffer)
 		if err != nil {
-			log.Println(err)
+			log.Println("Motion detection stopped: " + err.Error())
 			return
 		}
-		//		log.Println(buffer)
-		//buildFrameAvgDiff(&buffer, len(buffer))
+
 		if ignoredFrames < ignoreFirstFrames {
 			ignoredFrames++
 			continue
 		}
-		buildAvgBlocks(&vectorBlocks, &buffer, blockSize)
-		findTemporalAverage(&vectorAvgBlocks, &vectorHistory, vectorBlocks, numAvgFrames, sensitivity)
+		c.buildAvgBlocks(&currVectorBlocks, &buffer)
+		c.findTemporalAverage(&vectorAvgBlocks, &vectorHistory, &currVectorBlocks)
+		//c.reportChanges(&vectorAvgBlocks, &currVectorBlocks)
+		c.publish(caster, &vectorAvgBlocks, &currVectorBlocks)
 
 		//binary.Write(f, binary.LittleEndian, &buffer) // write to file
+	}
+}
+
+// Start motion detection and continues listening after interruptions to the data stream
+func (c *Motion) Start(caster *broker.Broker) {
+	for {
+		c.Detect(caster)
+	}
+}
+
+func main() {
+	cam := Motion{}
+
+	castMotion := broker.New()
+	go castMotion.Start()
+	go cam.Start(castMotion)
+
+	reader := castMotion.Subscribe()
+	for {
+		fmt.Println(<-reader)
 	}
 }

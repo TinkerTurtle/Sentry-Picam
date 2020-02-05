@@ -13,3 +13,21 @@ errorStatus, nal_ref_idc (ref field, frame or picture), nal_unit_type
 0 01 00001  non-IDR
 
 raspivid generates NAL units in this order: SPS, PPS, IDR, non-IDR...
+
+8.2.1.3 Decoding process for picture order count type 2 
+
+
+https://www.raspberrypi.org/blog/vectors-from-coarse-motion-estimation/
+https://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70095
+https://www.raspberrypi.org/forums/viewtopic.php?t=223180
+struct motion_vector {
+    int8 x_vector;
+    int8 y_vector;
+    int16 sad; // Sum of Absolute Difference
+}
+The information comes out of the encoder as side information.
+It is one integer per macroblock and is ((mb_width+1) × mb_height) × 4 bytes per frame
+
+Visualization for vectors from raspivid
+https://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70095&start=50#p1184359
+https://github.com/janblumenkamp/raspivid-motionvectors
