@@ -1,10 +1,23 @@
-package main
+package raspivid
 
+/*
+Usage:
+	cam := Motion{}
+
+	castMotion := broker.New()
+	go castMotion.Start()
+	go cam.Start(castMotion)
+
+	reader := castMotion.Subscribe()
+	for {
+		fmt.Println(<-reader)
+	}
+
+*/
 import (
-	"encoding/binary"
+	"bufio"
 	"fmt"
 	"log"
-	"net"
 
 	"simple-webcam/broker"
 )
@@ -19,8 +32,10 @@ type Motion struct {
 	BlockWidth     int
 	Protocol       string
 	ListenPort     string
+	output         []byte
 }
 
+const sizeofMotionVector = 4 // size of a motion vector in bytes
 type motionVector struct {
 	X   int8
 	Y   int8
@@ -143,23 +158,6 @@ func (c *Motion) findTemporalAverage(frameAvg *[]motionVector, frameHistory *[][
 	*frameHistory = append(*frameHistory, f2)
 }
 
-// listen starts listening for raspivid's output of motion vectors
-func listen(network string, sockAddr string) net.Conn {
-	l, err := net.Listen(network, sockAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer l.Close()
-
-	// Wait for a connection.
-	conn, err := l.Accept()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return conn
-}
-
 func (c *Motion) getMaxBlockWidth() {
 	sizeMacroX := c.Width / 16
 	sizeMacroY := c.Height / 16
@@ -216,23 +214,17 @@ func (c *Motion) init() {
 }
 
 func (c *Motion) publish(caster *broker.Broker, frameAvg *[]motionVector, currFrame *[]motionVector) {
-	out := ""
-	pRowIdx := 0
 	for i, v := range *frameAvg {
-		pRowIdx++
 		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold || abs(v.Y-(*currFrame)[i].Y) > c.SenseThreshold {
-			out += "X"
+			c.output[i] = 1
 		} else {
-			out += "."
-		}
-		if pRowIdx > 19 {
-			out += "\n"
-			pRowIdx = 0
+			c.output[i] = 0
 		}
 	}
-	reportFrameAvgDiff(frameAvg, len(*frameAvg))
-	reportFrameAvgDiff(currFrame, len(*currFrame))
-	caster.Publish(out)
+
+	//reportFrameAvgDiff(frameAvg, len(*frameAvg))
+	//reportFrameAvgDiff(currFrame, len(*currFrame))
+	caster.Publish(c.output)
 }
 
 // Detect motion by comparing the most recent frame with an average of the past numFrames.
@@ -247,28 +239,50 @@ func (c *Motion) Detect(caster *broker.Broker) {
 
 	c.getMaxBlockWidth()
 
-	buffer := make([]motionVector, numMacroblocks)
+	currMacroBlocks := make([]motionVector, 0, numMacroblocks)
 	currVectorBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
 	vectorAvgBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
+	c.output = make([]byte, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
 	vectorHistory := make([][]motionVector, 0, c.NumAvgFrames)
 	ignoredFrames := 0
+
+	buf := make([]byte, 1024)
+	s := bufio.NewReader(conn)
+	blocksRead := 0
 	for {
-		err := binary.Read(conn, binary.LittleEndian, &buffer)
+		_, err := s.Read(buf)
+
 		if err != nil {
 			log.Println("Motion detection stopped: " + err.Error())
 			return
 		}
 
-		if ignoredFrames < ignoreFirstFrames {
-			ignoredFrames++
-			continue
-		}
-		c.buildAvgBlocks(&currVectorBlocks, &buffer)
-		c.findTemporalAverage(&vectorAvgBlocks, &vectorHistory, &currVectorBlocks)
-		//c.reportChanges(&vectorAvgBlocks, &currVectorBlocks)
-		c.publish(caster, &vectorAvgBlocks, &currVectorBlocks)
+		bufIdx := 0
+		for bufIdx < len(buf) {
+			// Manually convert since binary.Read runs really slow on a Pi Zero (~20% CPU)
+			temp := motionVector{}
+			temp.X = int8(buf[0+bufIdx])
+			temp.Y = int8(buf[1+bufIdx])
+			temp.SAD = int16(buf[2+bufIdx]) << 4
+			temp.SAD |= int16(buf[3+bufIdx])
+			currMacroBlocks = append(currMacroBlocks, temp)
+			bufIdx += sizeofMotionVector
+			blocksRead++
 
-		//binary.Write(f, binary.LittleEndian, &buffer) // write to file
+			if blocksRead == numMacroblocks {
+				blocksRead = 0
+				if ignoredFrames < ignoreFirstFrames {
+					ignoredFrames++
+					continue
+				}
+				c.buildAvgBlocks(&currVectorBlocks, &currMacroBlocks)
+				c.findTemporalAverage(&vectorAvgBlocks, &vectorHistory, &currVectorBlocks)
+				c.publish(caster, &vectorAvgBlocks, &currVectorBlocks)
+
+				//binary.Write(f, binary.LittleEndian, &currMacroBlocks) // write to file
+				currMacroBlocks = currMacroBlocks[:0]
+			}
+		}
 	}
 }
 
@@ -276,18 +290,5 @@ func (c *Motion) Detect(caster *broker.Broker) {
 func (c *Motion) Start(caster *broker.Broker) {
 	for {
 		c.Detect(caster)
-	}
-}
-
-func main() {
-	cam := Motion{}
-
-	castMotion := broker.New()
-	go castMotion.Start()
-	go cam.Start(castMotion)
-
-	reader := castMotion.Subscribe()
-	for {
-		fmt.Println(<-reader)
 	}
 }

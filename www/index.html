@@ -70,7 +70,7 @@
 
       //var host = location.hostname + ":8080";
       var host = "192.168.1.112:8080"
-      cam = new SimpleWebcam("videoContainer", 'ws://' + host + "/ws");
+      cam = new SimpleWebcam("videoContainer", 'ws://' + host);
 
       monitorStream();
     });
@@ -78,7 +78,7 @@
 </head>
 
 <body>
-  <button type="button" id="btn_connect" style="display: none" disabled="disabled">Reload to reconnect</button>
+  <button type="button" id="btn_connect" onclick="location.reload()" style="display: none">Reload to reconnect</button>
   <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'})">Day mode</button>
   <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'})">Night mode</button>
   <span id="status"></span>

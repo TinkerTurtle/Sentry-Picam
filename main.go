@@ -18,6 +18,7 @@ import (
 
 var clients = make(map[*websocket.Conn]bool)
 var camera raspivid.Camera
+var motion raspivid.Motion
 
 func streamVideoToWS(ws *websocket.Conn, caster *broker.Broker, quit chan bool) {
 	stream := caster.Subscribe()
@@ -94,19 +95,19 @@ func wsHandler(caster *broker.Broker) http.Handler {
 			if messageType == websocket.TextMessage {
 				log.Println("Message Received: " + string(p))
 				switch string(p) {
-				case "REQUESTSTREAM":
+				case "start":
 					if !requestStreamStatus {
 						requestStreamStatus = true
 						go streamVideoToWS(ws, caster, quit)
 					} else {
 						log.Println("Already requested stream")
 					}
-				case "STOPSTREAM":
+				case "stop":
 					quit <- true
 					requestStreamStatus = false
-				case "NIGHTMODE":
+				case "mode:night":
 					camera.CameraNightMode <- true
-				case "DAYMODE":
+				case "mode:day":
 					camera.CameraNightMode <- false
 				}
 			}
@@ -155,6 +156,9 @@ func main() {
 	camera.SensorMode = flag.Int("sensor", 0, "Sensor mode")
 	camera.Bitrate = flag.Int("bitrate", 1500000, "Video bitrate")
 	camera.Rotation = flag.Int("rot", 0, "Rotate 0, 90, 180, or 270 degrees")
+	camera.Protocol = "tcp"
+	camera.ListenPort = ":9000"
+	camera.ListenPortMotion = ":9001"
 	flag.Parse()
 
 	listenPort := ":" + strconv.Itoa(*port)
@@ -162,18 +166,26 @@ func main() {
 		log.Fatal("FPS and bitrate must be greater than 1")
 	}
 
+	// setup motion detector
+	motion.Protocol = "tcp"
+	motion.ListenPort = ":9001"
+
 	// start broadcaster and camera
-	caster := broker.New()
-	go caster.Start()
-	go camera.Start(caster)
+	castVideo := broker.New()
+	castMotion := broker.New()
+	go castVideo.Start()
+	go castMotion.Start()
+
+	go motion.Start(castMotion)
+	go camera.Start(castVideo)
 
 	// setup web services
 	exDir, _ := os.Executable()
 	exDir = filepath.Dir(exDir)
 	fs := http.FileServer(http.Dir(exDir + "/www"))
 	http.Handle("/", fs)
-	http.Handle("/ws", wsHandler(caster))
-	http.Handle("/video.h264", httpStreamHandler(caster))
+	http.Handle("/ws/video", wsHandler(castVideo))
+	http.Handle("/video.h264", httpStreamHandler(castVideo))
 
 	log.Println("Listening on " + listenPort)
 	http.ListenAndServe(listenPort, nil)

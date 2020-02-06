@@ -1,3 +1,4 @@
+"use strict";
 var Wakelock = function (callback) {
     var status = false;
 
