@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"io"
 	"log"
+	"net"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"simple-webcam/broker"
 	h "simple-webcam/helper"
@@ -28,8 +30,8 @@ func (c *Camera) getRaspividArgs() []string {
 		"-x", c.Protocol + "://127.0.0.1" + c.ListenPortMotion,
 		"-w", strconv.Itoa(*c.Width),
 		"-h", strconv.Itoa(*c.Height),
-		//		"-fps", strconv.Itoa(*c.Fps),
 		"-rot", strconv.Itoa(*c.Rotation),
+		"-ev", "3",
 		"-mm", "backlit",
 		"-drc", "high",
 		"-ifx", "denoise",
@@ -37,7 +39,7 @@ func (c *Camera) getRaspividArgs() []string {
 		"-md", strconv.Itoa(*c.SensorMode),
 		"-pf", "baseline",
 		"-g", strconv.Itoa(*c.Fps * 2),
-		"-ih", "-stm",
+		"-ih", //"-stm",
 		"-a", "1028",
 		"-a", "%Y-%m-%d %l:%M:%S %P",
 	}
@@ -45,7 +47,10 @@ func (c *Camera) getRaspividArgs() []string {
 
 func (c *Camera) startDayCamera() (io.ReadCloser, *exec.Cmd) {
 	args := c.getRaspividArgs()
-	args = append(args, "-fps", strconv.Itoa(*c.Fps))
+	args = append(args,
+		"-fps", strconv.Itoa(*c.Fps),
+		"-ex", "backlight",
+	)
 	cmd := exec.Command("raspivid", args...)
 	stdOut, err := cmd.StdoutPipe()
 	h.CheckError(err)
@@ -66,13 +71,22 @@ func (c *Camera) startNightCamera() (io.ReadCloser, *exec.Cmd) {
 	return stdOut, cmd
 }
 
-func (c *Camera) receiveStream(reader chan io.Reader) {
+func (c *Camera) receiveStream(reader chan net.Conn) {
 	reader <- listen(c.Protocol, c.ListenPort)
+}
+
+func stopRaspivid(cmd *exec.Cmd, conn net.Conn) {
+	conn.Close()
+	err := cmd.Process.Kill()
+	h.CheckError(err)
+	cmd.Wait()
+
+	time.Sleep(time.Second) // hacky way to give raspivid time to shut down. maybe i'm not sending the right signal?
 }
 
 func (c *Camera) startStream(caster *broker.Broker) {
 	c.CameraNightMode = make(chan bool)
-	stream := make(chan io.Reader)
+	stream := make(chan net.Conn)
 	go c.receiveStream(stream)
 
 	if *c.Rotation == 90 || *c.Rotation == 270 {
@@ -102,14 +116,16 @@ func (c *Camera) startStream(caster *broker.Broker) {
 		return
 	}
 
-	stdOut, cmd := c.startDayCamera()
+	_, cmd := c.startDayCamera()
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Camera Online")
 
 	buffer := make([]byte, *c.Bitrate/5)
-	s := bufio.NewScanner(<-stream)
+
+	conn := <-stream
+	s := bufio.NewScanner(conn)
 	s.Buffer(buffer, len(buffer))
 	s.Split(splitFunc)
 
@@ -118,25 +134,17 @@ func (c *Camera) startStream(caster *broker.Broker) {
 		case nightMode := <-c.CameraNightMode:
 			if nightMode {
 				log.Println("Switching to night mode")
-				err := cmd.Process.Kill()
-				h.CheckError(err)
+				stopRaspivid(cmd, conn)
 
-				stdOut, cmd = c.startNightCamera()
-				s = bufio.NewScanner(io.Reader(stdOut))
-				s.Buffer(buffer, len(buffer))
-				s.Split(splitFunc)
+				_, cmd = c.startNightCamera()
 				if err := cmd.Start(); err != nil {
 					log.Fatal(err)
 				}
 			} else {
 				log.Println("Switching to day mode")
-				err := cmd.Process.Kill()
-				h.CheckError(err)
+				stopRaspivid(cmd, conn)
 
-				stdOut, cmd = c.startDayCamera()
-				s = bufio.NewScanner(io.Reader(stdOut))
-				s.Buffer(buffer, len(buffer))
-				s.Split(splitFunc)
+				_, cmd = c.startDayCamera()
 				if err := cmd.Start(); err != nil {
 					log.Fatal(err)
 				}
@@ -146,14 +154,16 @@ func (c *Camera) startStream(caster *broker.Broker) {
 				log.Println("Stream interrupted")
 				return
 			}
-			caster.Publish(append(nalDelimiter, s.Bytes()...))
-			//log.Println("NAL packet bytes: " + strconv.Itoa(len(s.Bytes())))
+			if len(s.Bytes()) > 0 {
+				caster.Publish(append(nalDelimiter, s.Bytes()...))
+				//log.Println("NAL packet bytes: " + strconv.Itoa(len(s.Bytes())))
+			}
 		}
 	}
 }
 
 // Start initializes the broadcast channel and starts raspivid
-func (c *Camera) Start(caster *broker.Broker) {
+func (c *Camera) Start(caster *broker.Broker, recordButton *Recorder) {
 	for {
 		c.startStream(caster)
 	}

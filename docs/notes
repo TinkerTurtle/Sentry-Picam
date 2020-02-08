@@ -31,3 +31,6 @@ It is one integer per macroblock and is ((mb_width+1) × mb_height) × 4 bytes p
 Visualization for vectors from raspivid
 https://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70095&start=50#p1184359
 https://github.com/janblumenkamp/raspivid-motionvectors
+
+
+raspivid exits when the socket is closed
