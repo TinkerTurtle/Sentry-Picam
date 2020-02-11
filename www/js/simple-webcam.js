@@ -2,12 +2,16 @@
 var SimpleWebcam = function(canvasID, wsAddress){
     var topOffset = 32;
     var ws; // websocket for video stream
+    var wsMotion; // websocket for motion stream
     var player; // Broadway player
     var ticks = 0; // increments for each NAL unit
     var motionCanvas; // canvas for motion visualization
     var mctx; // 2d context for the motion canvas
+    var dispMotionBlockWidth = 0;
+    var motionFrameWidth = 0;
     initPlayer();
     initVideoStream()
+    initMotionStream()
 
     function initVideoStream() {
         ws = new WebSocket(wsAddress+ "/ws/video");
@@ -35,7 +39,30 @@ var SimpleWebcam = function(canvasID, wsAddress){
                     frame = new Uint8Array(evt.data);
                     player.decode(frame);
                     ticks++;
-                    highlightMotion(20, 20, 16, 16);
+            }
+        }
+    }
+
+    function initMotionStream() {
+        wsMotion = new WebSocket(wsAddress+ "/ws/motion");
+        wsMotion.binaryType = "arraybuffer";
+    
+        wsMotion.onopen = function(evt) {
+            wsMotion.send("start");
+        }
+    
+        wsMotion.onclose = function(evt) {
+            console.log("disconnected motion stream")
+        }
+    
+        var frame;
+        wsMotion.onmessage = function(evt) {
+            if(evt.data.length === 0) {
+                return;
+            }
+            frame = new Uint8Array(evt.data);
+            if(motionFrameWidth != 0) {
+                highlightMotion(frame);
             }
         }
     }
@@ -64,11 +91,28 @@ var SimpleWebcam = function(canvasID, wsAddress){
         resizeVideo();
     });
 
-    function highlightMotion(x, y, width, height) {
+    function drawBox(x, y) {
         mctx.beginPath();
-        mctx.rect(x, y, width, height);
+        mctx.rect(x, y, dispMotionBlockWidth, dispMotionBlockWidth);
         mctx.strokeStyle = "red";
         mctx.stroke();
+    }
+
+    function highlightMotion(frame) {
+        var x = 0;
+        var y = 0;
+
+        for(var i in frame) {
+            if(frame[i] == 1) {
+                drawBox(x, y);
+            }
+
+            x += dispMotionBlockWidth;
+            if(x % motionCanvas.width == 0) {
+                y += dispMotionBlockWidth;
+                x = 0;
+            }
+        }
     }
 
     function initPlayer() {
@@ -100,6 +144,8 @@ var SimpleWebcam = function(canvasID, wsAddress){
         switch(msg.action) {
             case "init":
                 initCanvas(msg);
+                motionFrameWidth = (msg.width / 16) / msg.mbWidth;
+                dispMotionBlockWidth = msg.width / motionFrameWidth;
                 break;
             default:
                 console.log(msg);
@@ -118,7 +164,9 @@ var SimpleWebcam = function(canvasID, wsAddress){
     }
 
     return {
-        stop: function() { ws.close(); },
+        startrecord: function() { ws.send('startrecord'); },
+        stoprecord: function() { ws.send('stoprecord'); },
+        stop: function() { ws.close(); wsMotion.close(); },
         getTick: function() { return ticks; },
         set: set,
         setTopOffset: function(offset) { topOffset = offset; }

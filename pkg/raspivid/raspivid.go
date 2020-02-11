@@ -123,6 +123,8 @@ func (c *Camera) startStream(caster *broker.Broker) {
 	log.Println("Camera Online")
 
 	buffer := make([]byte, *c.Bitrate/5)
+	nalBuf := make([]byte, 1024)
+	copy(nalBuf, nalDelimiter)
 
 	conn := <-stream
 	s := bufio.NewScanner(conn)
@@ -155,7 +157,10 @@ func (c *Camera) startStream(caster *broker.Broker) {
 				return
 			}
 			if len(s.Bytes()) > 0 {
-				caster.Publish(append(nalDelimiter, s.Bytes()...))
+				nalBuf = append(nalDelimiter, s.Bytes()...)
+				caster.Publish(nalBuf)
+
+				nalBuf = nalBuf[:0]
 				//log.Println("NAL packet bytes: " + strconv.Itoa(len(s.Bytes())))
 			}
 		}
