@@ -17,6 +17,7 @@ import (
 // Camera is a wrapper for raspivid
 type Camera struct {
 	Width, Height, Fps, Bitrate, SensorMode, Rotation *int
+	DisableMotion                                     *bool
 	CameraNightMode                                   chan bool
 	Protocol                                          string
 	ListenPort                                        string
@@ -24,10 +25,9 @@ type Camera struct {
 }
 
 func (c *Camera) getRaspividArgs() []string {
-	return []string{
+	params := []string{
 		"-t", "0",
 		"-o", c.Protocol + "://127.0.0.1" + c.ListenPort,
-		"-x", c.Protocol + "://127.0.0.1" + c.ListenPortMotion,
 		"-w", strconv.Itoa(*c.Width),
 		"-h", strconv.Itoa(*c.Height),
 		"-rot", strconv.Itoa(*c.Rotation),
@@ -43,6 +43,10 @@ func (c *Camera) getRaspividArgs() []string {
 		"-a", "1028",
 		"-a", "%Y-%m-%d %l:%M:%S %P",
 	}
+	if !*c.DisableMotion {
+		params = append(params, "-x", c.Protocol+"://127.0.0.1"+c.ListenPortMotion)
+	}
+	return params
 }
 
 func (c *Camera) startDayCamera() (io.ReadCloser, *exec.Cmd) {
@@ -123,8 +127,6 @@ func (c *Camera) startStream(caster *broker.Broker) {
 	log.Println("Camera Online")
 
 	buffer := make([]byte, *c.Bitrate/5)
-	nalBuf := make([]byte, 1024)
-	copy(nalBuf, nalDelimiter)
 
 	conn := <-stream
 	s := bufio.NewScanner(conn)
@@ -157,10 +159,7 @@ func (c *Camera) startStream(caster *broker.Broker) {
 				return
 			}
 			if len(s.Bytes()) > 0 {
-				nalBuf = append(nalDelimiter, s.Bytes()...)
-				caster.Publish(nalBuf)
-
-				nalBuf = nalBuf[:0]
+				caster.Publish(append(nalDelimiter, s.Bytes()...))
 				//log.Println("NAL packet bytes: " + strconv.Itoa(len(s.Bytes())))
 			}
 		}

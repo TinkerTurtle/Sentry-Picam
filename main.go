@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -16,6 +17,12 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// ProductName string
+const ProductName = "simple-webcam"
+
+// ProductVersion #
+const ProductVersion = "0.0.0"
 
 var clients = make(map[*websocket.Conn]bool)
 var clientsMotion = make(map[*websocket.Conn]bool)
@@ -226,21 +233,30 @@ func httpStreamHandler(caster *broker.Broker) http.Handler {
 }
 
 func main() {
-	port := flag.Int("port", 8080, "Port to listen on")
+	version := flag.Bool("version", false, "Show version")
+	port := flag.Int("port", 8080, "Port to listen on.\nX+1 and X+2 ports are also used with raspivid")
 	camera.Width = flag.Int("width", 1280, "Video width")
 	camera.Height = flag.Int("height", 960, "Video height")
 	camera.Fps = flag.Int("fps", 12, "Video framerate. Minimum 1 fps")
 	camera.SensorMode = flag.Int("sensor", 0, "Sensor mode")
 	camera.Bitrate = flag.Int("bitrate", 2000000, "Video bitrate")
 	camera.Rotation = flag.Int("rot", 0, "Rotate 0, 90, 180, or 270 degrees")
+	camera.DisableMotion = flag.Bool("disablemotion", false, "Disable motion detection. Lowers CPU usage.")
 	camera.Protocol = "tcp"
-	camera.ListenPort = ":9000"
-	camera.ListenPortMotion = ":9001"
+	camera.ListenPort = ":" + strconv.Itoa(*port+1)
+	camera.ListenPortMotion = ":" + strconv.Itoa(*port+2)
 
 	mNumAvgFrames := flag.Int("mframes", 4, "Number of motion frames to examine")
 	mThreshold := flag.Int("mthreshold", 4, "Motion sensitivity. Lower # is more sensitive.")
-	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block. Video width and height be divisible by mblockwidth * 16")
+	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16")
 	flag.Parse()
+
+	if *version {
+		fmt.Println(ProductName + " version " + ProductVersion)
+		return
+	}
+
+	log.Println(ProductName + " version " + ProductVersion)
 	motion.NumAvgFrames = *mNumAvgFrames
 	motion.SenseThreshold = int8(*mThreshold)
 	motion.BlockWidth = *mBlockWidth
@@ -252,7 +268,7 @@ func main() {
 
 	// setup motion detector
 	motion.Protocol = "tcp"
-	motion.ListenPort = ":9001"
+	motion.ListenPort = camera.ListenPortMotion
 	motion.Width = *camera.Width
 	motion.Height = *camera.Height
 	motion.Init()
@@ -268,7 +284,7 @@ func main() {
 
 	go motion.Start(castMotion, &recorder)
 	go camera.Start(castVideo, &recorder)
-	go recorder.Init(castVideo, exDir+"/www/temp.h264")
+	go recorder.Init(castVideo, exDir+"/www/recordings/")
 
 	// setup web services
 	fs := http.FileServer(http.Dir(exDir + "/www"))

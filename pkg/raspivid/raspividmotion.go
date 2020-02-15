@@ -42,13 +42,13 @@ type Motion struct {
 const sizeofMotionVector = 4 // size of a motion vector in bytes
 type motionVector struct {
 	X int8
-	//Y int8
+	Y int8
 	//SAD int16 // Sum of Absolute Difference.
 }
 
 type mVhelper struct {
 	X int
-	//Y int
+	Y int
 	//SAD   int
 	count int
 }
@@ -56,14 +56,14 @@ type mVhelper struct {
 func (mV *mVhelper) add(v motionVector) {
 	mV.count++
 	mV.X += int(v.X)
-	//mV.Y += int(v.Y)
+	mV.Y += int(v.Y)
 	//mV.SAD += int(v.SAD)
 }
 
 func (mV *mVhelper) getAvg() motionVector {
 	return motionVector{
 		int8(mV.X / mV.count),
-		//int8(mV.Y / mV.count),
+		int8(mV.Y / mV.count),
 		//int16(mV.SAD / mV.count),
 	}
 }
@@ -71,7 +71,7 @@ func (mV *mVhelper) getAvg() motionVector {
 func (mV *mVhelper) reset() {
 	mV.count = 0
 	mV.X = 0
-	//mV.Y = 0
+	mV.Y = 0
 	//mV.SAD = 0
 }
 
@@ -209,7 +209,7 @@ func (c *Motion) Init() {
 func (c *Motion) publish(caster *broker.Broker, frameAvg *[]motionVector, currFrame *[]motionVector) int {
 	blocksTriggered := 0
 	for i, v := range *frameAvg {
-		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold {
+		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold || abs(v.Y-(*currFrame)[i].Y) > c.SenseThreshold {
 			c.output[i] = 1
 			blocksTriggered++
 			//log.Printf("Frames: %2d Thresh: %2d Xavg: %3d X: %3d Yavg: %3d Y: %3d", c.NumAvgFrames, c.SenseThreshold, v.X, (*currFrame)[i].X, v.Y, (*currFrame)[i].Y)
@@ -258,7 +258,7 @@ func (c *Motion) Detect(caster *broker.Broker) {
 			// Manually convert since binary.Read runs really slow on a Pi Zero (~20% CPU)
 			temp := motionVector{}
 			temp.X = int8(buf[0+bufIdx])
-			//temp.Y = int8(buf[1+bufIdx])
+			temp.Y = int8(buf[1+bufIdx])
 			//temp.SAD = int16(buf[2+bufIdx]) << 4
 			//temp.SAD |= int16(buf[3+bufIdx])
 			currMacroBlocks = append(currMacroBlocks, temp)

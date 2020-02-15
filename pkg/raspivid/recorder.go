@@ -1,6 +1,7 @@
 package raspivid
 
 import (
+	"fmt"
 	"os"
 	"simple-webcam/broker"
 	"time"
@@ -12,12 +13,16 @@ type Recorder struct {
 	StopTime        time.Time
 }
 
-// Init initializes the raspivid recorder
-func (rec *Recorder) Init(caster *broker.Broker, filepath string) {
+// Init initializes the raspivid recorder. folderpath must include the trailing slash
+func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 	stream := caster.Subscribe()
 	numHeaders := 0
 
-	f, _ := os.Create(filepath)
+	fileFormat := "%d-%02d-%02d-%02d00.h264"
+	now := time.Now()
+	fileName := fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour())
+
+	f, _ := os.Create(folderpath + fileName)
 	defer f.Close()
 
 	buf := [][]byte{}
@@ -26,6 +31,15 @@ func (rec *Recorder) Init(caster *broker.Broker, filepath string) {
 		x := <-stream
 
 		if rec.RequestedRecord && time.Now().Before(rec.StopTime) {
+			now = time.Now()
+			newName := fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour())
+			if fileName != newName {
+				fileName = newName
+				f.Close()
+				f, _ := os.Create(folderpath + fileName)
+				defer f.Close()
+			}
+
 			for _, v := range buf {
 				f.Write(v)
 			}
