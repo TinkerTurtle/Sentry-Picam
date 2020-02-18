@@ -53,7 +53,6 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 			buf = buf[:0]
 			numHeaders = 0
 			i = 0
-			f.Write(x.([]byte))
 		}
 
 		if x.([]byte)[4] == 39 { // always start with SPS header

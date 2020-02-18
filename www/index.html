@@ -73,6 +73,15 @@
       cam = new SimpleWebcam("videoContainer", 'ws://' + host);
 
       monitorStream();
+
+      document.querySelector('#btn_motionDetect').addEventListener('click', function() {
+        if(cam.toggleMotionMaskUx()) {
+            document.querySelector('#btn_motionDetect').innerHTML = 'Save detection sectors';
+        }
+        else {
+            document.querySelector('#btn_motionDetect').innerHTML = 'Edit detection sectors';
+        }
+      });
     });
   </script>
 </head>
@@ -81,6 +90,8 @@
   <button type="button" id="btn_connect" onclick="location.reload()" style="display: none">Reconnect</button>
   <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'})">Day mode</button>
   <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'})">Night mode</button>
+  <button type="button" id="btn_motionDetect">Edit detection sectors</button>
+  <a href="./recordings">Show Recordings</a>
   <span id="status"></span>
   <br />
 

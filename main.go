@@ -93,6 +93,27 @@ func initClientVideo(ws *websocket.Conn) {
 	ws.WriteMessage(websocket.TextMessage, message)
 }
 
+func initClientMotion(ws *websocket.Conn) {
+	type initMotion struct {
+		Mask []int8 `json:"mask"`
+	}
+
+	out := make([]int8, len(motion.MotionMask))
+	for i, v := range motion.MotionMask {
+		out[i] = int8(v)
+	}
+
+	settings := initMotion{
+		out,
+	}
+
+	message, err := json.Marshal(settings)
+	h.CheckError(err)
+	//log.Println("Initializing client motion with: " + string(message))
+
+	ws.WriteMessage(websocket.TextMessage, message)
+}
+
 func wsHandler(caster *broker.Broker) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{
@@ -167,6 +188,8 @@ func wsHandlerMotion(caster *broker.Broker) http.Handler {
 		clientsMotion[ws] = true
 		log.Println("Client Connected for motion")
 
+		initClientMotion(ws)
+
 		quit := make(chan bool)
 		requestStreamStatus := false
 		for {
@@ -181,7 +204,7 @@ func wsHandlerMotion(caster *broker.Broker) http.Handler {
 			}
 
 			if messageType == websocket.TextMessage {
-				log.Println("Motion Message Received: " + string(p))
+				//log.Println("Motion Message Received: " + string(p))
 				switch string(p) {
 				case "start":
 					if !requestStreamStatus {
@@ -194,6 +217,9 @@ func wsHandlerMotion(caster *broker.Broker) http.Handler {
 					quit <- true
 					requestStreamStatus = false
 				}
+			} else {
+				//log.Println("Applying motion detection mask")
+				motion.ApplyMask(p)
 			}
 		}
 	})
@@ -246,8 +272,8 @@ func main() {
 	camera.ListenPort = ":" + strconv.Itoa(*port+1)
 	camera.ListenPortMotion = ":" + strconv.Itoa(*port+2)
 
-	mNumAvgFrames := flag.Int("mframes", 4, "Number of motion frames to examine")
-	mThreshold := flag.Int("mthreshold", 4, "Motion sensitivity. Lower # is more sensitive.")
+	mNumInspectFrames := flag.Int("mframes", 3, "Number of motion frames to examine. Minimum 2.")
+	mThreshold := flag.Int("mthreshold", 2, "Motion sensitivity. Lower # is more sensitive.")
 	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16")
 	flag.Parse()
 
@@ -257,7 +283,7 @@ func main() {
 	}
 
 	log.Println(ProductName + " version " + ProductVersion)
-	motion.NumAvgFrames = *mNumAvgFrames
+	motion.NumInspectFrames = *mNumInspectFrames
 	motion.SenseThreshold = int8(*mThreshold)
 	motion.BlockWidth = *mBlockWidth
 
