@@ -70,7 +70,7 @@ var SimpleWebcam = function(canvasID, wsAddress){
             switch(typeof evt.data) {
                 case "string":
                     var inc = JSON.parse(evt.data);
-                    motionMask = inc.mask;
+                    motionMask = new Int8Array(inc.mask);
                     break;
                 default:
                     frame = new Uint8Array(evt.data);
@@ -115,8 +115,8 @@ var SimpleWebcam = function(canvasID, wsAddress){
     function drawBoxMask(x, y) {
         mctx.beginPath();
         mctx.rect(x, y, dispMotionBlockWidth, dispMotionBlockWidth);
-        mctx.strokeStyle = "red";
-        mctx.fillStyle = "rgba(100, 0, 0, 0.3)";
+        mctx.strokeStyle = "gray";
+        mctx.fillStyle = "rgba(0, 0, 0, 0.7)";
         mctx.fill();
         mctx.stroke();
     }
@@ -153,6 +153,33 @@ var SimpleWebcam = function(canvasID, wsAddress){
         });
     }
 
+    var motionMaskUx = {};
+    function evtMouseDown(evt) {
+        motionMaskUx.isDrawing = true;
+        var x = (evt.clientX - motionMaskUx.rect.left) / scalingFactor;
+        var y = (evt.clientY - motionMaskUx.rect.top) / scalingFactor;
+        var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
+        motionMaskUx.brush = motionMask[i] == 1 ? 0 : 1;
+    }
+
+    function evtMouseUp(evt) {
+        var x = (evt.clientX - motionMaskUx.rect.left) / scalingFactor;
+        var y = (evt.clientY - motionMaskUx.rect.top) / scalingFactor;
+        var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
+        motionMask[i] = motionMaskUx.brush;
+        motionMaskUx.isDrawing = false;
+        wsMotion.send(motionMask);
+    }
+
+    function evtMouseMove(evt) {
+        if(motionMaskUx.isDrawing) {
+            var x = (evt.clientX - motionMaskUx.rect.left) / scalingFactor;
+            var y = (evt.clientY - motionMaskUx.rect.top) / scalingFactor;
+            var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
+            motionMask[i] = motionMaskUx.brush;
+        }
+    }
+
     function initMotionMaskUx() {
         if(coordinateCache.length == 0) {
             console.log("Coordinate cache not initialized");
@@ -162,37 +189,24 @@ var SimpleWebcam = function(canvasID, wsAddress){
             motionMask = new Int8Array(coordinateCache.length).fill(0);
         }
 
-        var rect = motionCanvas.getBoundingClientRect();
-        var isDrawing = false;
-        var brush = 1;
-        motionCanvas.addEventListener("mousedown", function(evt) {
-            isDrawing = true;
-            var x = (evt.clientX - rect.left) / scalingFactor;
-            var y = (evt.clientY - rect.top) / scalingFactor;
-            var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
-            brush = motionMask[i] == 1 ? 0 : 1;
-        });
-        motionCanvas.addEventListener("mouseup", function(evt) {
-            var x = (evt.clientX - rect.left) / scalingFactor;
-            var y = (evt.clientY - rect.top) / scalingFactor;
-            var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
-            motionMask[i] = brush;
-            isDrawing = false;
-            wsMotion.send(motionMask);
-        });
-        motionCanvas.addEventListener("mousemove", function(evt) {
-            if(isDrawing) {
-                var x = (evt.clientX - rect.left) / scalingFactor;
-                var y = (evt.clientY - rect.top) / scalingFactor;
-                var i = Math.floor(x / dispMotionBlockWidth) + motionFrameWidth * Math.floor(y / dispMotionBlockWidth);
-                motionMask[i] = brush;
-            }
-        });
+        motionMaskUx.rect = motionCanvas.getBoundingClientRect();
+        motionMaskUx.isDrawing = false;
+        motionMaskUx.brush = 1;
+        motionCanvas.addEventListener("mousedown", evtMouseDown);
+        motionCanvas.addEventListener("mouseup", evtMouseUp);
+        motionCanvas.addEventListener("mousemove", evtMouseMove);
+    }
+
+    function destroyMotionMaskUx() {
+        motionCanvas.removeEventListener("mousedown", evtMouseDown);
+        motionCanvas.removeEventListener("mouseup", evtMouseUp);
+        motionCanvas.removeEventListener("mousemove", evtMouseMove);
     }
 
     function toggleMotionMaskUx() {
         if(isRunningMotionMaskUx) {
             isRunningMotionMaskUx = false;
+            destroyMotionMaskUx();
         }
         else {
             isRunningMotionMaskUx = true;

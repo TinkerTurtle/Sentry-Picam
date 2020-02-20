@@ -48,58 +48,49 @@ type motionVector struct {
 }
 
 type mVhelper struct {
-	X int
-	Y int
-	//SAD   int
-	count int
+	tX, tY, tXn, tYn int8 // counters for increasing and decreasing X/Y vectors
+	count            int
 }
 
 func (mV *mVhelper) add(v motionVector) {
 	mV.count++
-	mV.X += int(v.X)
-	mV.Y += int(v.Y)
-	//mV.SAD += int(v.SAD)
+
+	if v.X > 0 {
+		mV.tX++
+	} else if v.X < 0 {
+		mV.tXn++
+	}
+	if v.Y > 0 {
+		mV.tY++
+	} else if v.Y < 0 {
+		mV.tYn++
+	}
 }
 
-func (mV *mVhelper) getAvg() motionVector {
+// getAvg figures out if the motion vectors are in the same general direction
+func (mV *mVhelper) getAvg(threshold int8) motionVector {
+	if (mV.tX >= threshold || mV.tXn >= threshold) &&
+		(mV.tY >= threshold || mV.tYn >= threshold) {
+
+		return motionVector{
+			1,
+			1,
+			//int16(mV.SAD),
+		}
+	}
 	return motionVector{
-		int8(mV.X / mV.count),
-		int8(mV.Y / mV.count),
-		//int16(mV.SAD / mV.count),
+		0,
+		0,
+		//0,
 	}
 }
 
 func (mV *mVhelper) reset() {
 	mV.count = 0
-	mV.X = 0
-	mV.Y = 0
-	//mV.SAD = 0
-}
-
-func reportFrameAvgDiff(buf *[]motionVector, numBlocks int) {
-	/*	var totalSAD, totalX, totalY int32
-		var maxSAD int16
-		var maxX, maxY int8
-		for _, v := range *buf {
-			totalSAD += int32(v.SAD)
-			totalX += int32(v.Y)
-			totalY += int32(v.X)
-			if v.SAD > maxSAD {
-				maxSAD = v.SAD
-			}
-			if v.Y > maxY {
-				maxY = v.Y
-			}
-			if v.X > maxX {
-				maxX = v.X
-			}
-		}
-
-		log.Printf("Blocks: %5d SAD: %7d %7d X: %5d %5d Y: %5d %5d\n",
-			numBlocks,
-			totalSAD/int32(numBlocks), maxSAD,
-			totalX/int32(numBlocks), maxX,
-			totalY/int32(numBlocks), maxY)*/
+	mV.tX = 0
+	mV.tXn = 0
+	mV.tY = 0
+	mV.tYn = 0
 }
 
 // ApplyMask applies a mask to ignore specified motion blocks
@@ -107,9 +98,9 @@ func (c *Motion) ApplyMask(mask []byte) {
 	c.MotionMask = mask
 }
 
-// buildAvgBlock takes a blockWidth * blockWidth average of macroblocks from buf and stores the
+// condenseBlocksDirection takes a blockWidth * blockWidth average of macroblocks from buf and stores the
 // condensed result into frame
-func (c *Motion) buildAvgBlocks(frame *[]motionVector, buf *[]motionVector) {
+func (c *Motion) condenseBlocksDirection(frame *[]motionVector, buf *[]motionVector) {
 	rowCount := c.Height / 16
 	colCount := (c.Width + 16) / 16
 	usableCols := colCount - 1
@@ -134,7 +125,11 @@ func (c *Motion) buildAvgBlocks(frame *[]motionVector, buf *[]motionVector) {
 		}
 		if x%c.BlockWidth == 0 {
 			for idx, v := range mV {
-				(*frame)[compressedIndex] = v.getAvg()
+				if len(c.MotionMask) > 0 && c.MotionMask[compressedIndex] == 0 {
+					(*frame)[compressedIndex] = motionVector{0, 0}
+				} else {
+					(*frame)[compressedIndex] = v.getAvg(c.SenseThreshold)
+				}
 				mV[idx].reset()
 				compressedIndex++
 			}
@@ -147,35 +142,6 @@ func abs(x int8) int8 {
 		return -x
 	}
 	return x
-}
-
-// findTemporalAverage examines the past numFrames and stores the average to frameAvg
-func (c *Motion) findTemporalAverage(frameAvg *[]motionVector, frameHistory *[][]motionVector, currFrame *[]motionVector) {
-	var mV mVhelper
-
-	if len(*frameHistory) >= c.NumInspectFrames {
-		for i := 0; i < len(*currFrame); i++ {
-			for j := 0; j < c.NumInspectFrames; j++ {
-				mV.add((*frameHistory)[j][i])
-			}
-			(*frameAvg)[i] = mV.getAvg()
-			mV.reset()
-		}
-		*frameHistory = (*frameHistory)[1:] // slice off oldest frame
-	}
-	var f2 = make([]motionVector, len(*currFrame))
-	copy(f2, *currFrame)
-	*frameHistory = append(*frameHistory, f2)
-}
-
-// logVectorHistory logs currFrame into frameHistory
-func (c *Motion) logVectorHistory(frameHistory *[][]motionVector, currFrame *[]motionVector) {
-	if len(*frameHistory) >= c.NumInspectFrames {
-		*frameHistory = (*frameHistory)[1:] // slice off oldest frame
-	}
-	var f2 = make([]motionVector, len(*currFrame))
-	copy(f2, *currFrame)
-	*frameHistory = append(*frameHistory, f2)
 }
 
 func (c *Motion) getMaxBlockWidth() {
@@ -211,7 +177,7 @@ func (c *Motion) Init() {
 	}
 
 	if c.SenseThreshold == 0 {
-		c.SenseThreshold = 4
+		c.SenseThreshold = 9
 	}
 
 	if c.Protocol == "" || c.ListenPort == "" {
@@ -222,74 +188,17 @@ func (c *Motion) Init() {
 	c.getMaxBlockWidth()
 }
 
-func (c *Motion) publishAvg(caster *broker.Broker, frameAvg *[]motionVector, currFrame *[]motionVector) int {
+func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVector) int {
 	blocksTriggered := 0
-	for i, v := range *frameAvg {
-		if abs(v.X-(*currFrame)[i].X) > c.SenseThreshold || abs(v.Y-(*currFrame)[i].Y) > c.SenseThreshold {
+	for i, v := range *frame {
+		c.output[i] = 0
+		if v.X != 0 {
+			//log.Printf("Frames: %2d X1: %3d Y1: %3d", c.NumInspectFrames, v.X, v.Y)
 			c.output[i] = 1
 			blocksTriggered++
-			//log.Printf("Frames: %2d Thresh: %2d Xavg: %3d X: %3d Yavg: %3d Y: %3d", c.NumInspectFrames, c.SenseThreshold, v.X, (*currFrame)[i].X, v.Y, (*currFrame)[i].Y)
-			//log.Printf("Frames: %2d Thresh: %2d Xavg: %3d X: %3d", c.NumInspectFrames, c.SenseThreshold, v.X, (*currFrame)[i].X)
-		} else {
-			c.output[i] = 0
 		}
 	}
 
-	//reportFrameAvgDiff(frameAvg, len(*frameAvg))
-	//reportFrameAvgDiff(currFrame, len(*currFrame))
-	caster.Publish(c.output)
-	return blocksTriggered
-}
-
-func (c *Motion) publishHist(caster *broker.Broker, frameHistory *[][]motionVector) int {
-	blocksTriggered := 0
-	if len(*frameHistory) >= c.NumInspectFrames {
-		for i := range (*frameHistory)[0] {
-			c.output[i] = 0
-
-			if len(c.MotionMask) > 0 && c.MotionMask[i] == 0 {
-				continue
-			}
-			sxi := 0 // increasing X
-			sxd := 0 // decreasing X
-			syi := 0
-			syd := 0
-			for j := 0; j < c.NumInspectFrames-1; j++ {
-				if (*frameHistory)[j][i].X < (*frameHistory)[j+1][i].X {
-					sxi++
-				}
-
-				if (*frameHistory)[j][i].X > (*frameHistory)[j+1][i].X {
-					sxd++
-				}
-
-				if (*frameHistory)[j][i].Y < (*frameHistory)[j+1][i].Y {
-					syi++
-				}
-
-				if (*frameHistory)[j][i].Y > (*frameHistory)[j+1][i].Y {
-					syd++
-				}
-			}
-
-			if (sxi >= c.NumInspectFrames-1 ||
-				sxd >= c.NumInspectFrames-1) &&
-				(syi >= c.NumInspectFrames-1 ||
-					syd >= c.NumInspectFrames-1) &&
-				(abs((*frameHistory)[c.NumInspectFrames-2][i].X-(*frameHistory)[c.NumInspectFrames-1][i].X) > c.SenseThreshold ||
-					abs((*frameHistory)[c.NumInspectFrames-2][i].Y-(*frameHistory)[c.NumInspectFrames-1][i].Y) > c.SenseThreshold) {
-				c.output[i] = 1
-				blocksTriggered++
-				//log.Printf("Frames: %2d Caught: %2d X1: %3d X2: %3d X3: %3d", c.NumInspectFrames, fX, (*frameHistory)[0][i].X, (*frameHistory)[1][i].X, (*frameHistory)[2][i].X)
-				//log.Printf("Frames: %2d Caught: %2d Y1: %3d Y2: %3d Y3: %3d", c.NumInspectFrames, fY, (*frameHistory)[0][i].Y, (*frameHistory)[1][i].Y, (*frameHistory)[2][i].Y)
-				//log.Printf("Frames: %2d Caught: %2d X1: %3d X2: %3d X3: %3d X4: %3d", c.NumInspectFrames, fProcessed, (*frameHistory)[0][i].X, (*frameHistory)[1][i].X, (*frameHistory)[2][i].X, (*frameHistory)[3][i].X)
-			}
-			//log.Printf("Frames: %2d Thresh: %2d X1: %3d X2: %3d, X3: %3d, X4: %3d", c.NumInspectFrames, c.SenseThreshold, (*frameHistory)[0][i].X, (*frameHistory)[1][i].X, (*frameHistory)[2][i].X, v.X)
-		}
-	}
-
-	//reportFrameAvgDiff(frameAvg, len(*frameAvg))
-	//reportFrameAvgDiff(currFrame, len(*currFrame))
 	caster.Publish(c.output)
 	return blocksTriggered
 }
@@ -305,11 +214,9 @@ func (c *Motion) Detect(caster *broker.Broker) {
 	numUsableMacroblocks := (c.Width / 16) * (c.Height / 16)
 
 	currMacroBlocks := make([]motionVector, 0, numMacroblocks)
-	currVectorBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
-	vectorAvgBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
-	_ = vectorAvgBlocks
+	currCondensedBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
 	c.output = make([]byte, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
-	vectorHistory := make([][]motionVector, 0, c.NumInspectFrames)
+
 	ignoredFrames := 0
 
 	buf := make([]byte, 1024)
@@ -341,11 +248,8 @@ func (c *Motion) Detect(caster *broker.Broker) {
 					ignoredFrames++
 					continue
 				}
-				c.buildAvgBlocks(&currVectorBlocks, &currMacroBlocks)
-				//c.findTemporalAverage(&vectorAvgBlocks, &vectorHistory, &currVectorBlocks)
-				c.logVectorHistory(&vectorHistory, &currVectorBlocks)
-				//if c.publishAvg(caster, &vectorAvgBlocks, &currVectorBlocks) > 0 {
-				if c.publishHist(caster, &vectorHistory) > 0 {
+				c.condenseBlocksDirection(&currCondensedBlocks, &currMacroBlocks)
+				if c.publishParsedBlocks(caster, &currCondensedBlocks) > 0 {
 					c.recorder.StopTime = time.Now().Add(time.Second * 2)
 				}
 
