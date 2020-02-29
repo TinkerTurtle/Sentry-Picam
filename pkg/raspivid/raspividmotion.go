@@ -186,6 +186,7 @@ func (c *Motion) Init() {
 	}
 
 	c.getMaxBlockWidth()
+	log.Printf("Motion threshold: %d / %d\n", c.SenseThreshold, c.BlockWidth*c.BlockWidth)
 }
 
 func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVector) int {
@@ -206,7 +207,6 @@ func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVecto
 // Detect motion by comparing the most recent frame with an average of the past numFrames.
 // Lower senseThreshold value increases the sensitivity to motion.
 func (c *Motion) Detect(caster *broker.Broker) {
-	c.Init()
 	conn := listen(c.Protocol, c.ListenPort)
 
 	//f, _ := os.Create("motion.vec")
@@ -250,7 +250,7 @@ func (c *Motion) Detect(caster *broker.Broker) {
 				}
 				c.condenseBlocksDirection(&currCondensedBlocks, &currMacroBlocks)
 				if c.publishParsedBlocks(caster, &currCondensedBlocks) > 0 {
-					c.recorder.StopTime = time.Now().Add(time.Second * 2)
+					c.recorder.StopTime = time.Now().Add(time.Second * 5)
 				}
 
 				//binary.Write(f, binary.LittleEndian, &currMacroBlocks) // write to file
