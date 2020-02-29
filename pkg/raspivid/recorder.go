@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"simple-webcam/broker"
 	"time"
 )
@@ -12,12 +13,26 @@ import (
 type Recorder struct {
 	RequestedRecord bool
 	StopTime        time.Time
+	hasFfmpeg       bool
 }
 
-func getFilename(index int) string {
-	fileFormat := "%d-%02d-%02d-%02d00_%04d"
+func getFilename(lastName string, counter int) (string, int) {
+	fileFormat := "%d-%02d-%02d-%02d%02d"
 	now := time.Now()
-	return fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour(), index)
+	newFilename := fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute())
+	if newFilename == lastName {
+		counter++
+		return newFilename + fmt.Sprintf("_%04d", counter), counter
+	}
+
+	return fmt.Sprintf(fileFormat+"_%04d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
+}
+
+func (rec *Recorder) checkFfmpeg() {
+	_, err := exec.LookPath("ffmpeg")
+	if err == nil {
+		rec.hasFfmpeg = true
+	}
 }
 
 // Init initializes the raspivid recorder. folderpath must include the trailing slash
@@ -29,10 +44,8 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 	numHeaders := 0
 	fileCounter := 0
 
-	fileName := getFilename(fileCounter)
-
-	f, _ := os.Create(folderpath + fileName + extension)
-	defer f.Close()
+	var f *os.File
+	var fileName string
 
 	buf := [][]byte{}
 	i := 0
@@ -42,6 +55,12 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 
 		if rec.RequestedRecord {
 			if time.Now().Before(rec.StopTime) {
+				if startedFile == false {
+					fileName, fileCounter = getFilename(fileName, fileCounter)
+					f, _ = os.Create(folderpath + fileName + extension)
+					defer f.Close()
+				}
+
 				startedFile = true
 
 				for _, v := range buf {
@@ -56,9 +75,9 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 			} else if startedFile == true {
 				startedFile = false
 
-				fileCounter++
-				fileName = getFilename(fileCounter)
 				f.Close()
+
+				fileName, fileCounter = getFilename(fileName, fileCounter)
 				f, _ = os.Create(folderpath + fileName + extension)
 				defer f.Close()
 			}
