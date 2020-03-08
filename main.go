@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	//_ "net/http/pprof"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,6 +40,7 @@ func streamVideoToWS(ws *websocket.Conn, caster *broker.Broker, quit chan bool) 
 		select {
 		case <-quit:
 			log.Println("Ending a WS video stream")
+			caster.Unsubscribe(stream)
 			return
 		default:
 			x = <-stream
@@ -60,6 +61,7 @@ func streamMotionToWS(ws *websocket.Conn, caster *broker.Broker, quit chan bool)
 		select {
 		case <-quit:
 			log.Println("Ending a WS motion stream")
+			caster.Unsubscribe(stream)
 			return
 		default:
 			x = <-stream
@@ -273,7 +275,7 @@ func main() {
 	camera.ListenPort = ":" + strconv.Itoa(*port+1)
 	camera.ListenPortMotion = ":" + strconv.Itoa(*port+2)
 
-	mNumInspectFrames := flag.Int("mframes", 3, "Number of motion frames to examine. Minimum 2.\nLower # increases sensitivity.")
+	//mNumInspectFrames := flag.Int("mframes", 3, "Number of motion frames to examine. Minimum 2.\nLower # increases sensitivity.")
 	mThreshold := flag.Int("mthreshold", 9, "Motion sensitivity.\nLower # increases sensitivity.")
 	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16\nHigher # increases CPU usage, except 0 enables autodetection.")
 	flag.Parse()
@@ -284,7 +286,7 @@ func main() {
 	}
 
 	log.Println(ProductName + " version " + ProductVersion)
-	motion.NumInspectFrames = *mNumInspectFrames
+	//motion.NumInspectFrames = *mNumInspectFrames
 	motion.SenseThreshold = int8(*mThreshold)
 	motion.BlockWidth = *mBlockWidth
 

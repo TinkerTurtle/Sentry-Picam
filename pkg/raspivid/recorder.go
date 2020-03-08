@@ -41,6 +41,7 @@ func (rec *Recorder) checkFfmpeg() {
 func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 	extension := ".h264"
 	stream := caster.Subscribe()
+	defer caster.Unsubscribe(stream)
 	numHeaders := 0
 	fileCounter := 0
 

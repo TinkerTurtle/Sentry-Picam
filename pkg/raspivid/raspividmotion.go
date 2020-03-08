@@ -9,6 +9,7 @@ Usage:
 	go cam.Start(castMotion)
 
 	reader := castMotion.Subscribe()
+	defer castMotion.Unsubscribe(reader)
 	for {
 		fmt.Println(<-reader)
 	}
@@ -25,16 +26,15 @@ import (
 const ignoreFirstFrames = 10 // give camera's autoexposure some time to settle
 // Motion stores configuration parameters and forms the basis for Detect
 type Motion struct {
-	Width            int
-	Height           int
-	NumInspectFrames int
-	SenseThreshold   int8
-	BlockWidth       int
-	Protocol         string
-	ListenPort       string
-	MotionMask       []byte
-	output           []byte
-	recorder         *Recorder
+	Width          int
+	Height         int
+	SenseThreshold int8
+	BlockWidth     int
+	Protocol       string
+	ListenPort     string
+	MotionMask     []byte
+	output         []byte
+	recorder       *Recorder
 }
 
 // motionVector from raspivid.
@@ -170,10 +170,6 @@ func (c *Motion) Init() {
 	if c.Width == 0 || c.Height == 0 {
 		c.Width = 1280
 		c.Height = 960
-	}
-
-	if c.NumInspectFrames < 2 {
-		c.NumInspectFrames = 2
 	}
 
 	if c.SenseThreshold == 0 {
