@@ -25,7 +25,7 @@ func getFilename(lastName string, counter int) (string, int) {
 		return newFilename + fmt.Sprintf("_%02d", counter), counter
 	}
 
-	return fmt.Sprintf(fileFormat+"_%04d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
+	return fmt.Sprintf(fileFormat+"_%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
 }
 
 func (rec *Recorder) checkFfmpeg() {
