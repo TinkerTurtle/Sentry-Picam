@@ -22,7 +22,7 @@ func getFilename(lastName string, counter int) (string, int) {
 	newFilename := fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute())
 	if newFilename == lastName {
 		counter++
-		return newFilename + fmt.Sprintf("_%04d", counter), counter
+		return newFilename + fmt.Sprintf("_%02d", counter), counter
 	}
 
 	return fmt.Sprintf(fileFormat+"_%04d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
@@ -77,10 +77,6 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 				startedFile = false
 
 				f.Close()
-
-				fileName, fileCounter = getFilename(fileName, fileCounter)
-				f, _ = os.Create(folderpath + fileName + extension)
-				defer f.Close()
 			}
 		}
 

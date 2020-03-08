@@ -11,6 +11,7 @@ Usage:
 	go cam.Start(castMotion)
 
 	reader := castMotion.Subscribe()
+	defer castMotion.Unsubscribe(reader)
 	for {
 		fmt.Println(<-reader)
 	}
