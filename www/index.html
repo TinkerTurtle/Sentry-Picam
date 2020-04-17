@@ -31,7 +31,7 @@
       }
     }
 
-    var wakeLock = Wakelock(function () {
+    var wakeLock = Wakelock('wakelock', function () {
       document.querySelector('#status').innerHTML = "";
     });
     var wakeLockNotice = '<span style="color: red">NOTICE</span>: Click or touch anywhere to keep the screen on';
@@ -40,6 +40,7 @@
       document.querySelector('body').style.backgroundColor = 'black';
       document.title = 'Camera';
       document.querySelector('#btn_connect').style.display = 'none';
+      document.querySelector('#status').innerHTML = "";
     }
 
     function monitorStream() {
@@ -97,7 +98,7 @@
 
   <div id="videoContainer"></div>
 
-  <video loop>
+  <video id="wakelock" loop>
     <source src="js/Wakelock/wakelock.webm" type="video/mp4" />
   </video>
 </body>

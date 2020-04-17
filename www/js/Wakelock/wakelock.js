@@ -1,5 +1,5 @@
 "use strict";
-var Wakelock = function (callback) {
+var Wakelock = function (domId, callback) {
     var status = false;
 
     document.addEventListener('click', enableWakelock);
@@ -8,7 +8,7 @@ var Wakelock = function (callback) {
     function enableWakelock() {
         if (!status) {
             status = true;
-            document.querySelector('video').play();
+            document.querySelector('#' + domId).play();
 
             document.removeEventListener('click', enableWakelock);
             document.removeEventListener('touchstart', enableWakelock);
