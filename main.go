@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	_ "net/http/pprof"
+	//_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -265,7 +265,7 @@ func main() {
 	version := flag.Bool("version", false, "Show version")
 	port := flag.Int("port", 8080, "Port to listen on.\nX+1 and X+2 ports are also used with raspivid")
 	camera.Width = flag.Int("width", 1280, "Video width")
-	camera.Height = flag.Int("height", 960, "Video height")
+	camera.Height = flag.Int("height", 960, "Video height. 1080 needs to be 1088 for motion detection.")
 	camera.Fps = flag.Int("fps", 12, "Video framerate. Minimum 1 fps")
 	camera.SensorMode = flag.Int("sensor", 0, "Sensor mode")
 	camera.Bitrate = flag.Int("bitrate", 2000000, "Video bitrate")
@@ -277,7 +277,7 @@ func main() {
 
 	//mNumInspectFrames := flag.Int("mframes", 3, "Number of motion frames to examine. Minimum 2.\nLower # increases sensitivity.")
 	mThreshold := flag.Int("mthreshold", 9, "Motion sensitivity.\nLower # increases sensitivity.")
-	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16\nHigher # increases CPU usage, except 0 enables autodetection.")
+	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16\nHigher # increases CPU usage. Setting 0 enables autodetection.")
 	flag.Parse()
 
 	if *version {

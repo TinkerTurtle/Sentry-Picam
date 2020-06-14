@@ -32,7 +32,7 @@
     }
 
     var wakeLock = Wakelock('wakelock', function () {
-      document.querySelector('#status').innerHTML = "";
+      document.querySelector('#wakelockStatus').innerHTML = "";
     });
     var wakeLockNotice = '<span style="color: red">NOTICE</span>: Click or touch anywhere to keep the screen on';
 
@@ -67,7 +67,7 @@
     var cam;
     var cameraConnected = false;
     $(function () {
-      document.querySelector('#status').innerHTML = wakeLockNotice;
+      document.querySelector('#wakelockStatus').innerHTML = wakeLockNotice;
 
       var host = location.hostname + ":8080";
       //var host = "192.168.1.112:8080"
@@ -77,7 +77,7 @@
 
       document.querySelector('#btn_motionDetect').addEventListener('click', function() {
         if(cam.toggleMotionMaskUx()) {
-            document.querySelector('#btn_motionDetect').innerHTML = 'Save detection sectors';
+            document.querySelector('#btn_motionDetect').innerHTML = 'Close sector editor';
         }
         else {
             document.querySelector('#btn_motionDetect').innerHTML = 'Edit detection sectors';
@@ -94,6 +94,7 @@
   <button type="button" id="btn_motionDetect">Edit detection sectors</button>
   <a href="./recordings">Show Recordings</a>
   <span id="status"></span>
+  <span id="wakelockStatus"></span>
   <br />
 
   <div id="videoContainer"></div>

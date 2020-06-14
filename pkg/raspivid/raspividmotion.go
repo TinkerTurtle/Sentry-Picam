@@ -200,7 +200,7 @@ func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVecto
 	return blocksTriggered
 }
 
-// Detect motion by comparing the most recent frame with an average of the past numFrames.
+// Detect parses motion vectors provided by raspivid
 // Lower senseThreshold value increases the sensitivity to motion.
 func (c *Motion) Detect(caster *broker.Broker) {
 	conn := listen(c.Protocol, c.ListenPort)
@@ -232,7 +232,7 @@ func (c *Motion) Detect(caster *broker.Broker) {
 			temp := motionVector{}
 			temp.X = int8(buf[0+bufIdx])
 			temp.Y = int8(buf[1+bufIdx])
-			//temp.SAD = int16(buf[2+bufIdx]) << 4
+			//temp.SAD = int16(buf[2+bufIdx]) << 4 // SAD might be spiking around keyframes and triggers false positives
 			//temp.SAD |= int16(buf[3+bufIdx])
 			currMacroBlocks = append(currMacroBlocks, temp)
 			bufIdx += sizeofMotionVector

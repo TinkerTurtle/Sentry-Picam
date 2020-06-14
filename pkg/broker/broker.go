@@ -11,9 +11,9 @@ type Broker struct {
 func New() *Broker {
 	return &Broker{
 		stopCh:    make(chan struct{}),
-		publishCh: make(chan interface{}, 1),
-		subCh:     make(chan chan interface{}, 1),
-		unsubCh:   make(chan chan interface{}, 1),
+		publishCh: make(chan interface{}, 20),
+		subCh:     make(chan chan interface{}),
+		unsubCh:   make(chan chan interface{}),
 	}
 }
 
@@ -44,7 +44,7 @@ func (b *Broker) Stop() {
 }
 
 func (b *Broker) Subscribe() chan interface{} {
-	msgCh := make(chan interface{}, 5)
+	msgCh := make(chan interface{}, 20)
 	b.subCh <- msgCh
 	return msgCh
 }
