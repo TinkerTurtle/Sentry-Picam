@@ -137,13 +137,6 @@ func (c *Motion) condenseBlocksDirection(frame *[]motionVector, buf *[]motionVec
 	}
 }
 
-func abs(x int8) int8 {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
 func (c *Motion) getMaxBlockWidth() {
 	sizeMacroX := c.Width / 16
 	sizeMacroY := c.Height / 16

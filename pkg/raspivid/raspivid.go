@@ -154,7 +154,7 @@ func (c *Camera) startStream(caster *broker.Broker) {
 				}
 			}
 		default:
-			if s.Scan() == false {
+			if !s.Scan() {
 				log.Println("Stream interrupted")
 				return
 			}
