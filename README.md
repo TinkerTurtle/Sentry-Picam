@@ -2,9 +2,9 @@
 
 ![Mosaic of a 3d printed sentry turret, bird, and screenshot of a bar graph](https://raw.githubusercontent.com/TinkerTurtle/TinkerTurtle.github.io/main/img/sentry-picam.png)
 
-Sentry-Picam is a simple wildlife / security camera solution for the Raspberry Pi Zero W, providing 1080p/30fps motion activated video capture. The built in web interface makes it easy to review video clips and identify the busiest times of day.
+Sentry-Picam is a simple wildlife / security camera solution for the Raspberry Pi Zero W, providing 1080p/30fps motion activated H.264 video capture. The built in web interface makes it easy to review video clips and identify the busiest times of day.
 
-Motion detection in Sentry-Picam uses vectors provided by RaspiVid's H.264 video pipeline, enabling performant and effective supression of video noise.
+Motion detection in Sentry-Picam uses vectors provided by RaspiVid's video pipeline, enabling performant and effective supression of video noise.
 
 Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https://github.com/raspberrypi/userland/blob/master/host_applications/linux/apps/raspicam/RaspiVid.c), the Pi Zero W hardware can also stream live video to multiple devices with a ~300ms delay over Wifi.
 
@@ -38,7 +38,7 @@ To View options:
     ./sentry-picam -height 1088 -width 1920 -fps 30 -bitrate 4000000
     ```
 
-3. Use "Edit Detection Sectors" to specify areas where motion detection should be triggered.
+3. Use "Edit Detection Sectors" in the web UI to specify areas where motion detection should be triggered.
 
 4. Set up auto start:
     ```
@@ -49,10 +49,12 @@ To View options:
 
 5. Custom programs can be set up to trigger other functionality, like notifications or image classification. Ffmpeg is a prerequisite. 
 
-    Sentry-picam runs your program after generating a thumbnail, and passes in the video/thumbnail name as a argument. Your program will need to append the .mp4 file extension to access the video, or .jpg to access the thumbnail.
+    Sentry-picam runs your program after generating a thumbnail, and passes in the video/thumbnail name as a argument to your program. Your program will need to append the .mp4 file extension to access the video, or .jpg to access the thumbnail. Recordings are stored in ```./www/recordings/```
     ```
     ./sentry-picam -run my_script.sh
     ```
+
+6. Files discarded from the web interface may be recovered from the folder ```./www/recordings/deleteme/```. The web interface will occasionally empty this folder, starting with recordings over 7 days old.
 
 ## Compiling from source code from Windows for a Raspberry Pi Zero
 ```
