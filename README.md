@@ -49,7 +49,7 @@ To View options:
 
 5. Custom programs can be set up to trigger other functionality, like notifications or image classification. Ffmpeg is a prerequisite. 
 
-    Sentry-picam runs your program after generating a thumbnail, and passes in the video/thumbnail name as a argument to your program. Your program will need to append the .mp4 file extension to access the video, or .jpg to access the thumbnail. Recordings are stored in ```./www/recordings/```
+    Sentry-picam runs your program after generating a thumbnail, and passes in the video/thumbnail name as an argument to your program. Your program will need to append the .mp4 file extension to access the video, or .jpg to access the thumbnail. Recordings are stored in ```./www/recordings/```
     ```
     ./sentry-picam -run my_script.sh
     ```
