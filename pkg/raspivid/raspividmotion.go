@@ -18,23 +18,25 @@ Usage:
 import (
 	"bufio"
 	"log"
+	"os"
 	"time"
 
-	"simple-webcam/broker"
+	"sentry-picam/broker"
 )
 
 const ignoreFirstFrames = 10 // give camera's autoexposure some time to settle
 // Motion stores configuration parameters and forms the basis for Detect
 type Motion struct {
-	Width          int
-	Height         int
-	SenseThreshold int8
-	BlockWidth     int
-	Protocol       string
-	ListenPort     string
-	MotionMask     []byte
-	output         []byte
-	recorder       *Recorder
+	Width           int
+	Height          int
+	SenseThreshold  int8
+	BlockWidth      int
+	Protocol        string
+	ListenPort      string
+	MotionMask      []byte
+	output          []byte
+	recorder        *Recorder
+	RecordingFolder string
 }
 
 // motionVector from raspivid.
@@ -96,6 +98,31 @@ func (mV *mVhelper) reset() {
 // ApplyMask applies a mask to ignore specified motion blocks
 func (c *Motion) ApplyMask(mask []byte) {
 	c.MotionMask = mask
+
+	f, _ := os.Create(c.RecordingFolder + "motionMask.bin")
+	f.Write(mask)
+	defer f.Close()
+}
+
+// ApplyPreviousMask applies the previously registered motion mask
+func (c *Motion) ApplyPreviousMask() {
+	f, err := os.ReadFile(c.RecordingFolder + "motionMask.bin")
+	if err != nil {
+		log.Printf("Couldn't load motion mask")
+		return
+	}
+
+	rowCount := c.Height / 16
+	colCount := (c.Width + 16) / 16
+	usableCols := colCount - 1
+
+	maskLength := (usableCols / c.BlockWidth) * (rowCount / c.BlockWidth)
+	if len(f) == maskLength {
+		c.MotionMask = f
+		log.Printf("Previously registered motion mask has been applied")
+	} else {
+		log.Printf("Couldn't apply previous motion mask due to changed resolution")
+	}
 }
 
 // condenseBlocksDirection takes a blockWidth * blockWidth average of macroblocks from buf and stores the
@@ -159,7 +186,7 @@ func (c *Motion) getMaxBlockWidth() {
 }
 
 // Init initializes configuration variables for Motion
-func (c *Motion) Init() {
+func (c *Motion) Init(usePreviousMask bool) {
 	if c.Width == 0 || c.Height == 0 {
 		c.Width = 1280
 		c.Height = 960
@@ -175,7 +202,15 @@ func (c *Motion) Init() {
 	}
 
 	c.getMaxBlockWidth()
+	if c.SenseThreshold > int8(c.BlockWidth*c.BlockWidth) {
+		c.SenseThreshold = int8(c.BlockWidth)
+		log.Printf("mthreshold lowered to %d\n", c.SenseThreshold)
+	}
 	log.Printf("Motion threshold: %d / %d\n", c.SenseThreshold, c.BlockWidth*c.BlockWidth)
+
+	if usePreviousMask {
+		c.ApplyPreviousMask()
+	}
 }
 
 func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVector) int {

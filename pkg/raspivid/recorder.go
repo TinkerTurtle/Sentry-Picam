@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"simple-webcam/broker"
+	"sentry-picam/broker"
 	"time"
 )
 
@@ -28,17 +28,28 @@ func getFilename(lastName string, counter int) (string, int) {
 	return fmt.Sprintf(fileFormat+"_%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
 }
 
-func (rec *Recorder) checkFfmpeg() {
+func (rec *Recorder) checkFfmpeg() bool {
 	_, err := exec.LookPath("ffmpeg")
 	if err == nil {
 		rec.hasFfmpeg = true
 	}
+
+	return rec.hasFfmpeg
 }
 
 // Init initializes the raspivid recorder. folderpath must include the trailing slash
-// When recording is triggered by (rec.StoptTime > now), up to numHeaders Iframes will be
+// When recording is triggered by (rec.StopTime > now), up to numHeaders Iframes will be
 // saved before the trigger
-func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
+func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate int, triggerScript string) {
+	os.MkdirAll(folderpath+"raw/", 0777)
+
+	converter := Converter{}
+	converter.Framerate = framerate
+	converter.TriggerScript = triggerScript
+	if rec.checkFfmpeg() {
+		go converter.Start(rec, folderpath)
+	}
+
 	extension := ".h264"
 	stream := caster.Subscribe()
 	defer caster.Unsubscribe(stream)
@@ -56,10 +67,9 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 
 		if rec.RequestedRecord {
 			if time.Now().Before(rec.StopTime) {
-				if startedFile == false {
+				if !startedFile {
 					fileName, fileCounter = getFilename(fileName, fileCounter)
-					f, _ = os.Create(folderpath + fileName + extension)
-					defer f.Close()
+					f, _ = os.Create(folderpath + "raw/" + fileName + extension)
 				}
 
 				startedFile = true
@@ -73,7 +83,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string) {
 				buf = buf[:0]
 				numHeaders = 0
 				i = 0
-			} else if startedFile == true {
+			} else if startedFile {
 				startedFile = false
 
 				f.Close()

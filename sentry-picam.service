@@ -1,0 +1,8 @@
+[Unit]
+Description=Sentry-Picam
+
+[Service]
+ExecStart=/home/pi/sentry-picam/sentry-picam -record -upmm
+
+[Install]
+WantedBy=multi-user.target

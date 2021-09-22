@@ -1,0 +1,44 @@
+body {
+    background-color: black;
+    font-family: sans-serif;
+    color: white;
+}
+
+img {
+    width: 23vw;
+    aspect-ratio: 4/3;
+    border: 4px solid black;
+    cursor: pointer;
+}
+img:hover {
+    border: 4px solid white;
+}
+
+a {
+    color: lightblue;
+    text-decoration: underline;
+}
+
+button {
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+#status {
+    background-color: black;
+    border: 1px solid black;
+    padding: 4px;
+    font-weight: bold;
+}
+
+#chart {
+    color: white;
+}
+
+.dc-chart .axis line, .dc-chart .axis path {
+    stroke: white;
+}
+
+g>text {
+    fill: white;
+}

@@ -10,18 +10,19 @@ import (
 	"strconv"
 	"time"
 
-	"simple-webcam/broker"
-	h "simple-webcam/helper"
+	"sentry-picam/broker"
+	h "sentry-picam/helper"
 )
 
 // Camera is a wrapper for raspivid
 type Camera struct {
-	Width, Height, Fps, Bitrate, SensorMode, Rotation *int
-	DisableMotion                                     *bool
-	CameraNightMode                                   chan bool
-	Protocol                                          string
-	ListenPort                                        string
-	ListenPortMotion                                  string
+	Width, Height, Fps, Bitrate, SensorMode, Rotation, ExposureValue *int
+	MeteringMode, DynamicRangeCompression, ImageEffect, ExposureMode *string
+	DisableMotion                                                    *bool
+	CameraNightMode                                                  chan bool
+	Protocol                                                         string
+	ListenPort                                                       string
+	ListenPortMotion                                                 string
 }
 
 func (c *Camera) getRaspividArgs() []string {
@@ -31,14 +32,14 @@ func (c *Camera) getRaspividArgs() []string {
 		"-w", strconv.Itoa(*c.Width),
 		"-h", strconv.Itoa(*c.Height),
 		"-rot", strconv.Itoa(*c.Rotation),
-		"-ev", "3",
-		"-mm", "backlit",
-		"-drc", "high",
-		"-ifx", "denoise",
+		"-ev", strconv.Itoa(*c.ExposureValue),
+		"-mm", *c.MeteringMode,
+		"-drc", *c.DynamicRangeCompression,
+		"-ifx", *c.ImageEffect,
 		"-b", strconv.Itoa(*c.Bitrate),
 		"-md", strconv.Itoa(*c.SensorMode),
 		"-pf", "baseline",
-		"-g", strconv.Itoa(*c.Fps * 2),
+		"-g", strconv.Itoa(*c.Fps * 2), // I-frame interval
 		"-ih", //"-stm",
 		"-a", "1028",
 		"-a", "%Y-%m-%d %l:%M:%S %P",
@@ -53,7 +54,7 @@ func (c *Camera) startDayCamera() (io.ReadCloser, *exec.Cmd) {
 	args := c.getRaspividArgs()
 	args = append(args,
 		"-fps", strconv.Itoa(*c.Fps),
-		"-ex", "backlight",
+		"-ex", *c.ExposureMode,
 	)
 	cmd := exec.Command("raspivid", args...)
 	stdOut, err := cmd.StdoutPipe()
@@ -126,7 +127,7 @@ func (c *Camera) startStream(caster *broker.Broker) {
 	}
 	log.Println("Camera Online")
 
-	buffer := make([]byte, *c.Bitrate/5)
+	buffer := make([]byte, *c.Bitrate/4)
 
 	conn := <-stream
 	s := bufio.NewScanner(conn)
@@ -167,7 +168,7 @@ func (c *Camera) startStream(caster *broker.Broker) {
 }
 
 // Start initializes the broadcast channel and starts raspivid
-func (c *Camera) Start(caster *broker.Broker, recordButton *Recorder) {
+func (c *Camera) Start(caster *broker.Broker) {
 	for {
 		c.startStream(caster)
 	}

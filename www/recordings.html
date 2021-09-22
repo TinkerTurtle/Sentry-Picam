@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Camera</title>
+  <link rel="stylesheet" href="css/micromodal.css">
+  <script src="js/MicroModal/micromodal.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.1/d3.min.js" integrity="sha512-1e0JvdNhUkvFbAURPPlFKcX0mWu/b6GT9e0uve7BW4MFxJ15q4ZCd/Llz+B7/oh+qhw7/l6Q1ObPt6aAuR01+Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter2/1.5.4/crossfilter.min.js" integrity="sha512-YTblpiY3CE9zQBW//UMBfvDF2rz6bS7vhhT5zwzqQ8P7Z0ikBGG8hfcRwmmg3IuLl2Rwk95NJUEs1HCQD4EDKQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dc/4.2.7/dc.min.js" integrity="sha512-vIRU1/ofrqZ6nA3aOsDQf8kiJnAHnLrzaDh4ob8yBcJNry7Czhb8mdKIP+p8y7ixiNbT/As1Oii9IVk+ohSFiA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dc/4.2.7/style/dc.min.css" integrity="sha512-t38Qn1jREPvzPvDLgIP2fjtOayaA1KKBuNpNj9BGgiMi+tGLOdvDB+aWLMe2BvokHg1OxRLQLE7qrlLo+A+MLA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    function $(fn) {
+      if (document.readyState != 'loading') {
+        fn();
+      } else {
+        document.addEventListener('DOMContentLoaded', fn);
+      }
+    }
+
+    function showVideos(data) {
+        if(data == null) {
+            document.querySelector('#body').innerHTML = '🤷 No recorded videos';
+            return;
+        }
+        data.sort();
+        data.reverse();
+        videoList = data;
+        let buf = '';
+        for(let i in data) {
+            buf += `<img class="thumbnail" data-id="${i}" />`;
+        }
+
+        document.querySelector('#body').innerHTML = buf;
+        startLazyLoader();
+
+        document.querySelectorAll('img').forEach(elem => {
+            elem.addEventListener('click', function() {
+                showVideo(elem.dataset.id);
+            });
+        });
+    }
+
+    function deleteVideo(id) {
+        fetch('./api/videos/' + videoList[id], {method: 'DELETE'})
+            .then(function() {
+                nextVideo();
+                videoList.splice(id, 1);
+                document.querySelector(`img[data-id="${id}"]`).remove();
+            });
+    }
+
+    function deleteAll() {
+        let promises = videoList.map(video => {
+            return fetch('./api/videos/' + video, {method: 'DELETE'})
+        });
+        Promise.all(promises)
+            .then(function() {
+                location.reload();
+            });
+    }
+
+    var currId = 0;
+    function showVideo(id) {
+        currId = parseInt(id);
+        let file = videoList[id];
+        document.querySelector('#dialog-title').innerHTML = file;
+        document.querySelector('#dialog-content').innerHTML = `
+            <button class="modal__btn modal__btn-delete" style="position: absolute" onclick="deleteVideo('${id}')">🗑️</button>
+            <video controls autoplay style="width: 60%; display: block; margin: auto; border: 2px solid white">
+                <source src="recordings/${file}.mp4" type="video/mp4"/>
+            </video>
+            <div style="text-align: center; padding-top: 1rem">
+                <button class="modal__btn" onclick="prevVideo()">⏮️</button>
+                <button class="modal__btn" onclick="nextVideo()">⏭️</button>
+            </div>`;
+        MicroModal.show('dialog');
+    }
+
+    function prevVideo() {
+        let nextId = currId + 1;
+        if(nextId >= videoList.length) {
+            MicroModal.close('dialog');
+        }
+        else {
+            showVideo(nextId);
+        }
+    }
+
+    function nextVideo() {
+        let prevId = currId - 1;
+        if(prevId < 0) {
+            MicroModal.close('dialog');
+        }
+        else {
+            showVideo(prevId);
+        }
+    }
+
+    function populateImg(elem) {
+        if(elem.src == '') {
+            setTimeout(function() {
+                if(isElementPartiallyInViewport(elem)) {
+                    elem.src = `recordings/${videoList[elem.dataset.id]}.jpg`;
+                }
+            }, 100);
+        }
+    }
+
+    // https://stackoverflow.com/questions/123999/how-can-i-tell-if-a-dom-element-is-visible-in-the-current-viewport
+    function isElementPartiallyInViewport(el)
+    {
+        var rect = el.getBoundingClientRect();
+        var windowHeight = (window.innerHeight || document.documentElement.clientHeight);
+        var windowWidth = (window.innerWidth || document.documentElement.clientWidth);
+
+        // http://stackoverflow.com/questions/325933/determine-whether-two-date-ranges-overlap
+        var vertInView = (rect.top <= windowHeight) && ((rect.top + rect.height) >= 0);
+        var horInView = (rect.left <= windowWidth) && ((rect.left + rect.width) >= 0);
+
+        return (vertInView && horInView);
+    }
+
+    var observerTimeout;
+    function observerHandler(entries, observer) {
+        entries.forEach(entry => {
+            if(entry.intersectionRatio > 0.1) {
+                populateImg(entry.target);
+            }
+        });
+    }
+
+    function startLazyLoader() {
+        let observer = new IntersectionObserver(observerHandler, {
+            rootMargin: '0px',
+            threshold: 0.1
+        });
+        let thumbList = document.querySelectorAll('.thumbnail');
+        thumbList.forEach(item => {
+            observer.observe(item);
+        });
+    }
+
+    function viewStats() {
+        document.querySelector('#dialog-title').innerHTML = "Detected events per hour";
+        document.querySelector('#dialog-content').innerHTML = `
+            <div id="chart" style="text-align: center; width: 70vw; height: 60vh">
+            </div>`;
+        MicroModal.show('dialog');
+
+        let chart = new dc.BarChart('#chart');
+        let data = [];
+        for(let i in videoList) {
+            let year = parseInt(videoList[i].substr(0, 4));
+            let month = parseInt(videoList[i].substr(5, 2));
+            let day = parseInt(videoList[i].substr(8, 2));
+            let hour = parseInt(videoList[i].substr(11, 2));
+            let date = new Date(year, month - 1, day);
+
+            let t = {};
+            t.videoID = videoList[i];
+            t.hour = hour;
+            t.weekday = date.toLocaleString(window.navigator.language, {weekday: 'short'});
+            data.push(t);
+        }
+
+        let events = crossfilter(data);
+        dimHour = events.dimension(d => { return d.hour; });
+        grpHour = dimHour.group().reduceCount();
+
+        chart
+            .dimension(dimHour)
+            .group(grpHour)
+            .useViewBoxResizing(true)
+            .x(d3.scaleLinear().domain([0,24]))
+            .yAxisLabel("Events")
+            .xAxisLabel("Hour");
+
+        chart.render();
+    }
+
+    var videoList;
+    $(function () {
+        MicroModal.init({disableFocus: true,
+            awaitCloseAnimation: true
+        });
+        fetch('./api/videos')
+            .then(res => res.json())
+            .then(data => showVideos(data));
+
+        fetch('./api/videos/cleanup', {method: 'DELETE'});
+    });
+  </script>
+</head>
+
+<body>
+    <a href="./"><button>🎥 Live View</button></a>
+    <button onclick="viewStats()">📊 View Statistics</button>
+    <div id="body" style="text-align: center"></div>
+    <br /><br />
+    <div style="text-align: center"><button onclick="deleteAll()">Discard All</button></div>
+    <!-- micromodal.js -->
+    <div class="modal micromodal-slide" id="dialog" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+            <header class="modal__header">
+                <h2 class="modal__title" id="dialog-title"></h2>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close></button>
+            </header>
+            <main class="modal__content" id="dialog-content"></main>
+            <footer class="modal__footer" style="text-align: center">
+            </footer>
+        </div>
+        </div>
+    </div>
+</body>
+
+</html>

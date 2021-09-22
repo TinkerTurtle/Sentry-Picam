@@ -6,24 +6,26 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	//_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"simple-webcam/broker"
-	h "simple-webcam/helper"
-	"simple-webcam/raspivid"
+	"sentry-picam/broker"
+	h "sentry-picam/helper"
+	"sentry-picam/raspivid"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
 // ProductName string
-const ProductName = "simple-webcam"
+const ProductName = "sentry-picam"
 
 // ProductVersion #
-const ProductVersion = "0.0.0"
+const ProductVersion = "0.7.0"
 
 var clients = make(map[*websocket.Conn]bool)
 var clientsMotion = make(map[*websocket.Conn]bool)
@@ -235,7 +237,7 @@ func httpStreamHandler(caster *broker.Broker) http.Handler {
 		w.Header().Add("Transfer-Encoding", "chunked")
 		w.WriteHeader(200)
 
-		quit := w.(http.CloseNotifier).CloseNotify()
+		quit := r.Context().Done()
 
 		seenHeader := false
 		stream := caster.Subscribe()
@@ -247,7 +249,7 @@ func httpStreamHandler(caster *broker.Broker) http.Handler {
 				break loop
 			default:
 				x = <-stream
-				if seenHeader == false && x.([]byte)[4] == 39 { // SPS header
+				if !seenHeader && x.([]byte)[4] == 39 { // SPS header
 					seenHeader = true
 				}
 
@@ -269,15 +271,25 @@ func main() {
 	camera.Fps = flag.Int("fps", 12, "Video framerate. Minimum 1 fps")
 	camera.SensorMode = flag.Int("sensor", 0, "Sensor mode")
 	camera.Bitrate = flag.Int("bitrate", 2000000, "Video bitrate")
+
+	camera.ExposureValue = flag.Int("ev", 3, "(raspivid) Exposure Value")
+	camera.MeteringMode = flag.String("mm", "backlit", "(raspivid) Metering Mode")
+	camera.DynamicRangeCompression = flag.String("drc", "high", "(raspivid) Dynamic Range Compression")
+	camera.ImageEffect = flag.String("ifx", "denoise", "(raspivid) Image Effect")
+	camera.ExposureMode = flag.String("ex", "backlight", "(raspivid) Exposure Mode")
+
 	camera.Rotation = flag.Int("rot", 0, "Rotate 0, 90, 180, or 270 degrees")
 	camera.DisableMotion = flag.Bool("disablemotion", false, "Disable motion detection. Lowers CPU usage.")
+	record := flag.Bool("record", false, "Record detected motion events.")
 	camera.Protocol = "tcp"
 	camera.ListenPort = ":" + strconv.Itoa(*port+1)
 	camera.ListenPortMotion = ":" + strconv.Itoa(*port+2)
 
 	//mNumInspectFrames := flag.Int("mframes", 3, "Number of motion frames to examine. Minimum 2.\nLower # increases sensitivity.")
 	mThreshold := flag.Int("mthreshold", 9, "Motion sensitivity.\nLower # increases sensitivity.")
-	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16\nHigher # increases CPU usage. Setting 0 enables autodetection.")
+	mBlockWidth := flag.Int("mblockwidth", 0, "Width of motion detection block.\nVideo width and height be divisible by mblockwidth * 16\nLower # increases detection resolution")
+	usePrevMotionMask := flag.Bool("upmm", false, "Use previous motion mask")
+	triggerScript := flag.String("run", "", "Run script when motion is detected")
 	flag.Parse()
 
 	if *version {
@@ -295,15 +307,18 @@ func main() {
 		log.Fatal("FPS and bitrate must be greater than 1")
 	}
 
+	exDir, _ := os.Executable()
+	exDir = filepath.Dir(exDir)
+
+	recordingFolder := exDir + "/www/recordings/"
+
 	// setup motion detector
 	motion.Protocol = "tcp"
 	motion.ListenPort = camera.ListenPortMotion
 	motion.Width = *camera.Width
 	motion.Height = *camera.Height
-	motion.Init()
-
-	exDir, _ := os.Executable()
-	exDir = filepath.Dir(exDir)
+	motion.RecordingFolder = recordingFolder
+	motion.Init(*usePrevMotionMask)
 
 	// start broadcaster and camera
 	castVideo := broker.New()
@@ -312,16 +327,38 @@ func main() {
 	go castMotion.Start()
 
 	go motion.Start(castMotion, &recorder)
-	go camera.Start(castVideo, &recorder)
-	go recorder.Init(castVideo, exDir+"/www/recordings/")
+	go camera.Start(castVideo)
+	go recorder.Init(castVideo, recordingFolder, *camera.Fps, *triggerScript)
+
+	if *record {
+		time.AfterFunc(2*time.Second, func() { // let raspivid settle in
+			log.Println("Recording enabled from console")
+			recorder.RequestedRecord = true
+		})
+	}
 
 	// setup web services
-	fs := http.FileServer(http.Dir(exDir + "/www"))
-	http.Handle("/", fs)
-	http.Handle("/ws/video", wsHandler(castVideo))
-	http.Handle("/ws/motion", wsHandlerMotion(castMotion))
-	http.Handle("/video.h264", httpStreamHandler(castVideo))
+	r := mux.NewRouter()
+	//fs := http.FileServer(http.Dir(exDir + "/www"))
+	//r.Handle("/", fs)
+	r.Handle("/ws/video", wsHandler(castVideo))
+	r.Handle("/ws/motion", wsHandlerMotion(castMotion))
+	r.Handle("/video.h264", httpStreamHandler(castVideo))
+
+	recordingList := RecordingList{}
+	recordingList.Folder = recordingFolder
+	status := Status{}
+	status.Recorder = &recorder
+	api := r.PathPrefix("/api").Subrouter()
+	api.HandleFunc("/videos", recordingList.handleRecordingList).Methods("GET")
+	api.HandleFunc("/videos/cleanup", recordingList.handleDestroyRecording).Methods("DELETE")
+	api.HandleFunc("/videos/{videoID}", recordingList.handleDeleteRecording).Methods("DELETE")
+	api.HandleFunc("/status", status.handleStatus).Methods("GET")
+
+	// static files
+	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(exDir+"/www/js"))))
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir(exDir + "/www")))
 
 	log.Println("HTTP Listening on " + listenPort)
-	http.ListenAndServe(listenPort, nil)
+	http.ListenAndServe(listenPort, r)
 }

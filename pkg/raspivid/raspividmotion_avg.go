@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 package raspivid
@@ -22,7 +23,7 @@ import (
 	"log"
 	"time"
 
-	"simple-webcam/broker"
+	"sentry-picam/broker"
 )
 
 const ignoreFirstFrames = 10 // give camera's autoexposure some time to settle

@@ -3,25 +3,14 @@
 
 <head>
   <title>Camera</title>
-  <style>
-    body {
-      background-color: black;
-      font-family: sans-serif;
-      color: white;
-    }
-
-    #status {
-      background-color: black;
-      border: 1px solid black;
-      padding: 4px;
-      font-weight: bold;
-    }
-  </style>
+  <link rel="stylesheet" href="css/micromodal.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/MicroModal/micromodal.js"></script>
   <script src="js/Broadway/Decoder.js"></script>
   <script src="js/Broadway/YUVCanvas.js"></script>
   <script src="js/Broadway/Player.js"></script>
   <script src="js/Wakelock/wakelock.js"></script>
-  <script src="js/simple-webcam.js"></script>
+  <script src="js/sentry-picam.js"></script>
   <script>
     function $(fn) {
       if (document.readyState != 'loading') {
@@ -34,7 +23,7 @@
     var wakeLock = Wakelock('wakelock', function () {
       document.querySelector('#wakelockStatus').innerHTML = "";
     });
-    var wakeLockNotice = '<span style="color: red">NOTICE</span>: Click or touch anywhere to keep the screen on';
+    var wakeLockNotice = '<button>💡 Keep the screen on</button>';
 
     function showCameraConnected() {
       document.querySelector('body').style.backgroundColor = 'black';
@@ -64,6 +53,28 @@
       }, 2000);
     }
 
+    function viewSettings() {
+        document.querySelector('#dialog-title').innerHTML = "Settings";
+        document.querySelector('#dialog-content').innerHTML = `
+            <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'}); MicroModal.close('dialog');">☀️ Day mode</button>
+            <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'}; MicroModal.close('dialog');)">🌙 Night mode</button>
+            <br /><br />
+            <div id="recordControl"></div>
+            `;
+        MicroModal.show('dialog');
+
+        fetch('./api/status')
+          .then(res => res.json())
+          .then(data => {
+              if(data.isRecording) {
+                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.stoprecord(); MicroModal.close('dialog');">⏹️ Stop Recording</button>`;
+              }
+              else {
+                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.startrecord(); MicroModal.close('dialog');">🔴 Record Motion Events</button>`;
+              }
+          });
+    }
+
     var cam;
     var cameraConnected = false;
     $(function () {
@@ -71,16 +82,16 @@
 
       var host = location.hostname + ":8080";
       //var host = "192.168.1.112:8080"
-      cam = new SimpleWebcam("videoContainer", 'ws://' + host);
+      cam = new SentryPicam("videoContainer", 'ws://' + host);
 
       monitorStream();
 
       document.querySelector('#btn_motionDetect').addEventListener('click', function() {
         if(cam.toggleMotionMaskUx()) {
-            document.querySelector('#btn_motionDetect').innerHTML = 'Close sector editor';
+            document.querySelector('#btn_motionDetect').innerHTML = '💾 Apply Changes';
         }
         else {
-            document.querySelector('#btn_motionDetect').innerHTML = 'Edit detection sectors';
+            document.querySelector('#btn_motionDetect').innerHTML = '✏️ Edit detection sectors';
         }
       });
     });
@@ -88,11 +99,10 @@
 </head>
 
 <body>
-  <button type="button" id="btn_connect" onclick="location.reload()" style="display: none">Reconnect</button>
-  <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'})">Day mode</button>
-  <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'})">Night mode</button>
-  <button type="button" id="btn_motionDetect">Edit detection sectors</button>
-  <a href="./recordings">Show Recordings</a>
+  <button type="button" id="btn_connect" onclick="location.reload()" style="display: none">🔌 Reconnect</button>
+  <button type="button" onclick="viewSettings()">⚙️ Settings</button>
+  <button type="button" id="btn_motionDetect">✏️ Edit detection sectors</button>
+  <a href="./recordings.html"><button>🎞️ View Recordings</button></a>
   <span id="status"></span>
   <span id="wakelockStatus"></span>
   <br />
@@ -102,6 +112,21 @@
   <video id="wakelock" loop>
     <source src="js/Wakelock/wakelock.webm" type="video/mp4" />
   </video>
+
+    <!-- micromodal.js -->
+    <div class="modal micromodal-slide" id="dialog" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+            <header class="modal__header">
+                <h2 class="modal__title" id="dialog-title"></h2>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close></button>
+            </header>
+            <main class="modal__content" id="dialog-content"></main>
+            <footer class="modal__footer" style="text-align: center">
+            </footer>
+        </div>
+        </div>
+    </div>
 </body>
 
 </html>

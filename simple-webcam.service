@@ -1,8 +1,0 @@
-[Unit]
-Description=Simple Webcam
-
-[Service]
-ExecStart=/home/pi/simple-webcam/simple-webcam
-
-[Install]
-WantedBy=multi-user.target

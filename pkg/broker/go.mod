@@ -1,3 +1,3 @@
-module simple-webcam/broker
+module sentry-picam/broker
 
 go 1.13
