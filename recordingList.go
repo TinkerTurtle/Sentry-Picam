@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -18,7 +17,7 @@ type RecordingList struct {
 }
 
 func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Request) {
-	files, err := ioutil.ReadDir(rec.Folder)
+	files, err := os.ReadDir(rec.Folder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +47,7 @@ func (rec *RecordingList) handleDeleteRecording(w http.ResponseWriter, r *http.R
 }
 
 func (rec *RecordingList) handleDestroyRecording(w http.ResponseWriter, r *http.Request) {
-	files, err := ioutil.ReadDir(rec.Folder + "deleteme/")
+	files, err := os.ReadDir(rec.Folder + "deleteme/")
 	if err != nil {
 		return
 	}

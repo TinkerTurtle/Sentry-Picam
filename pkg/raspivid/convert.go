@@ -1,7 +1,6 @@
 package raspivid
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -17,7 +16,7 @@ type Converter struct {
 }
 
 func (conv *Converter) convert(folder string) {
-	files, err := ioutil.ReadDir(folder + "raw/")
+	files, err := os.ReadDir(folder + "raw/")
 	if err != nil {
 		log.Fatal(err)
 	}
