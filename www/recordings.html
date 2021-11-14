@@ -3,8 +3,8 @@
 
 <head>
   <title>Camera</title>
-  <link rel="stylesheet" href="css/micromodal.css">
-  <script src="js/MicroModal/micromodal.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tingle/0.16.0/tingle.min.css" integrity="sha512-b+T2i3P45i1LZM7I00Ci5QquB9szqaxu+uuk5TUSGjZQ4w4n+qujQiIuvTv2BxE7WCGQCifNMksyKILDiHzsOg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tingle/0.16.0/tingle.min.js" integrity="sha512-2B9/byNV1KKRm5nQ2RLViPFD6U4dUjDGwuW1GU+ImJh8YinPU9Zlq1GzdTMO+G2ROrB5o1qasJBy1ttYz0wCug==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.1/d3.min.js" integrity="sha512-1e0JvdNhUkvFbAURPPlFKcX0mWu/b6GT9e0uve7BW4MFxJ15q4ZCd/Llz+B7/oh+qhw7/l6Q1ObPt6aAuR01+Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter2/1.5.4/crossfilter.min.js" integrity="sha512-YTblpiY3CE9zQBW//UMBfvDF2rz6bS7vhhT5zwzqQ8P7Z0ikBGG8hfcRwmmg3IuLl2Rwk95NJUEs1HCQD4EDKQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dc/4.2.7/dc.min.js" integrity="sha512-vIRU1/ofrqZ6nA3aOsDQf8kiJnAHnLrzaDh4ob8yBcJNry7Czhb8mdKIP+p8y7ixiNbT/As1Oii9IVk+ohSFiA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -24,12 +24,10 @@
             document.querySelector('#body').innerHTML = '🤷 No recorded videos';
             return;
         }
-        data.sort();
-        data.reverse();
         videoList = data;
         let buf = '';
         for(let i in data) {
-            buf += `<img class="thumbnail" data-id="${i}" />`;
+            buf += `<img class="thumbnail" data-id="${data[i]}" />`;
         }
 
         document.querySelector('#body').innerHTML = buf;
@@ -42,12 +40,12 @@
         });
     }
 
-    function deleteVideo(id) {
-        fetch('./api/videos/' + videoList[id], {method: 'DELETE'})
+    function deleteVideo(file) {
+        fetch('./api/videos/' + file, {method: 'DELETE'})
             .then(function() {
                 nextVideo();
-                videoList.splice(id, 1);
-                document.querySelector(`img[data-id="${id}"]`).remove();
+                videoList.splice(videoList.indexOf(file), 1);
+                document.querySelector(`img[data-id="${file}"]`).remove();
             });
     }
 
@@ -62,39 +60,38 @@
     }
 
     var currId = 0;
-    function showVideo(id) {
-        currId = parseInt(id);
-        let file = videoList[id];
-        document.querySelector('#dialog-title').innerHTML = file;
-        document.querySelector('#dialog-content').innerHTML = `
-            <button class="modal__btn modal__btn-delete" style="position: absolute" onclick="deleteVideo('${id}')">🗑️</button>
-            <video controls autoplay style="width: 60%; display: block; margin: auto; border: 2px solid white">
+    function showVideo(file) {
+        currId = videoList.indexOf(file);
+        modal.setContent(`
+            <h1 style="margin-top: 0">${file}</h1>
+            <button class="modal__btn" style="position: absolute" onclick="deleteVideo('${file}')">🗑️</button>
+            <video controls autoplay style="width: 80%; display: block; margin: auto; border: 2px solid white">
                 <source src="recordings/${file}.mp4" type="video/mp4"/>
             </video>
             <div style="text-align: center; padding-top: 1rem">
                 <button class="modal__btn" onclick="prevVideo()">⏮️</button>
                 <button class="modal__btn" onclick="nextVideo()">⏭️</button>
-            </div>`;
-        MicroModal.show('dialog');
+            </div>`);
+        modal.open();
     }
 
     function prevVideo() {
         let nextId = currId + 1;
-        if(nextId >= videoList.length) {
-            MicroModal.close('dialog');
+        if(videoList[nextId] == undefined) {
+            modal.close();
         }
         else {
-            showVideo(nextId);
+            showVideo(videoList[nextId]);
         }
     }
 
     function nextVideo() {
         let prevId = currId - 1;
-        if(prevId < 0) {
-            MicroModal.close('dialog');
+        if(videoList[prevId] == undefined) {
+            modal.close();
         }
         else {
-            showVideo(prevId);
+            showVideo(videoList[prevId]);
         }
     }
 
@@ -102,7 +99,7 @@
         if(elem.src == '') {
             setTimeout(function() {
                 if(isElementPartiallyInViewport(elem)) {
-                    elem.src = `recordings/${videoList[elem.dataset.id]}.jpg`;
+                    elem.src = `recordings/${elem.dataset.id}.jpg`;
                 }
             }, 100);
         }
@@ -143,11 +140,11 @@
     }
 
     function viewStats() {
-        document.querySelector('#dialog-title').innerHTML = "Detected events per hour";
-        document.querySelector('#dialog-content').innerHTML = `
+        modal.setContent(`
+            <h1>Detected events per hour</h1>
             <div id="chart" style="text-align: center; width: 70vw; height: 60vh">
-            </div>`;
-        MicroModal.show('dialog');
+            </div>`);
+        modal.open();
 
         let chart = new dc.BarChart('#chart');
         let data = [];
@@ -180,14 +177,16 @@
         chart.render();
     }
 
-    var videoList;
+    var videoList, modal;
     $(function () {
-        MicroModal.init({disableFocus: true,
-            awaitCloseAnimation: true
-        });
+        modal = new tingle.modal();
         fetch('./api/videos')
             .then(res => res.json())
-            .then(data => showVideos(data));
+            .then(data => {
+                data.sort();
+                data.reverse();
+                showVideos(data);
+            });
 
         fetch('./api/videos/cleanup', {method: 'DELETE'});
     });
@@ -200,20 +199,6 @@
     <div id="body" style="text-align: center"></div>
     <br /><br />
     <div style="text-align: center"><button onclick="deleteAll()">Discard All</button></div>
-    <!-- micromodal.js -->
-    <div class="modal micromodal-slide" id="dialog" aria-hidden="true">
-        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-            <header class="modal__header">
-                <h2 class="modal__title" id="dialog-title"></h2>
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close></button>
-            </header>
-            <main class="modal__content" id="dialog-content"></main>
-            <footer class="modal__footer" style="text-align: center">
-            </footer>
-        </div>
-        </div>
-    </div>
 </body>
 
 </html>

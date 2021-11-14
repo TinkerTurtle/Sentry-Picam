@@ -42,3 +42,16 @@ button {
 g>text {
     fill: white;
 }
+
+.tingle-modal-box {
+    width: 80%;
+}
+.tingle-modal-box__content {
+    background-color: #414141;
+}
+.modal__btn {
+    border: none;
+    padding: 0;
+    background: none;
+    font-size: 2rem;
+}

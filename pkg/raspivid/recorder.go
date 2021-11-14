@@ -5,8 +5,14 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sentry-picam/broker"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/ricochet2200/go-disk-usage/du"
 )
 
 // Recorder writes the video stream to disk
@@ -14,6 +20,8 @@ type Recorder struct {
 	RequestedRecord bool
 	StopTime        time.Time
 	hasFfmpeg       bool
+	MinFreeSpace    uint64
+	IsFreeingSpace  sync.Mutex
 }
 
 func getFilename(lastName string, counter int) (string, int) {
@@ -35,6 +43,41 @@ func (rec *Recorder) checkFfmpeg() bool {
 	}
 
 	return rec.hasFfmpeg
+}
+
+func (rec *Recorder) maintenance(folder string) {
+	rec.IsFreeingSpace.Lock()
+	usage := du.NewDiskUsage(folder)
+	freeSpace := usage.Available()
+	if usage.Available() > rec.MinFreeSpace {
+		return
+	}
+
+	for freeSpace < rec.MinFreeSpace {
+		rec.deleteOldest(folder, freeSpace)
+		usage = du.NewDiskUsage(folder)
+		freeSpace = usage.Available()
+	}
+	rec.IsFreeingSpace.Unlock()
+}
+
+func (rec *Recorder) deleteOldest(folder string, freeSpace uint64) {
+	files, err := os.ReadDir(folder)
+	if err != nil {
+		return
+	}
+
+	for _, f := range files {
+		extension := filepath.Ext(strings.ToLower(f.Name()))
+		name := strings.TrimSuffix(filepath.Base(f.Name()), filepath.Ext(f.Name()))
+
+		if extension == ".mp4" {
+			os.Remove(folder + name + ".mp4")
+			os.Remove(folder + name + ".jpg")
+			log.Println("Low free space (" + strconv.FormatUint(freeSpace/1024, 10) + " KiB free). Deleted oldest recording: " + name)
+			return
+		}
+	}
 }
 
 // Init initializes the raspivid recorder. folderpath must include the trailing slash
@@ -87,6 +130,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 				startedFile = false
 
 				f.Close()
+				go rec.maintenance(folderpath)
 			}
 		}
 

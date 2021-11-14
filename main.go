@@ -271,6 +271,7 @@ func main() {
 	camera.Fps = flag.Int("fps", 12, "Video framerate. Minimum 1 fps")
 	camera.SensorMode = flag.Int("sensor", 0, "Sensor mode")
 	camera.Bitrate = flag.Int("bitrate", 2000000, "Video bitrate")
+	minFreeSpace := flag.Uint64("minFreeSpace", 1073741824, "Keep at least minFreeSpace available by deleting old recordings")
 
 	camera.ExposureValue = flag.Int("ev", 3, "(raspivid) Exposure Value")
 	camera.MeteringMode = flag.String("mm", "backlit", "(raspivid) Metering Mode")
@@ -328,6 +329,7 @@ func main() {
 
 	go motion.Start(castMotion, &recorder)
 	go camera.Start(castVideo)
+	recorder.MinFreeSpace = *minFreeSpace
 	go recorder.Init(castVideo, recordingFolder, *camera.Fps, *triggerScript)
 
 	if *record {
