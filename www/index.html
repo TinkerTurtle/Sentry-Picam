@@ -3,9 +3,9 @@
 
 <head>
   <title>Camera</title>
-  <link rel="stylesheet" href="css/micromodal.css">
   <link rel="stylesheet" href="css/style.css">
-  <script src="js/MicroModal/micromodal.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tingle/0.16.0/tingle.min.css" integrity="sha512-b+T2i3P45i1LZM7I00Ci5QquB9szqaxu+uuk5TUSGjZQ4w4n+qujQiIuvTv2BxE7WCGQCifNMksyKILDiHzsOg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tingle/0.16.0/tingle.min.js" integrity="sha512-2B9/byNV1KKRm5nQ2RLViPFD6U4dUjDGwuW1GU+ImJh8YinPU9Zlq1GzdTMO+G2ROrB5o1qasJBy1ttYz0wCug==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="js/Broadway/Decoder.js"></script>
   <script src="js/Broadway/YUVCanvas.js"></script>
   <script src="js/Broadway/Player.js"></script>
@@ -54,31 +54,33 @@
     }
 
     function viewSettings() {
-        document.querySelector('#dialog-title').innerHTML = "Settings";
-        document.querySelector('#dialog-content').innerHTML = `
-            <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'}); MicroModal.close('dialog');">☀️ Day mode</button>
-            <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'}; MicroModal.close('dialog');)">🌙 Night mode</button>
+        modal.setContent(`
+            <h1>Settings</h1>
+            <button type="button" id="btn_modeDay" onclick="cam.set({mode: 'DAY'}); modal.close();">☀️ Day mode</button>
+            <button type="button" id="btn_modeNight" onclick="cam.set({mode: 'NIGHT'}; modal.close();)">🌙 Night mode</button>
             <br /><br />
             <div id="recordControl"></div>
-            `;
-        MicroModal.show('dialog');
+            `);
+        modal.open();
 
         fetch('./api/status')
           .then(res => res.json())
           .then(data => {
               if(data.isRecording) {
-                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.stoprecord(); MicroModal.close('dialog');">⏹️ Stop Recording</button>`;
+                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.stoprecord(); modal.close();">⏹️ Stop Recording</button>`;
               }
               else {
-                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.startrecord(); MicroModal.close('dialog');">🔴 Record Motion Events</button>`;
+                document.querySelector('#recordControl').innerHTML = `<button onclick="cam.startrecord(); modal.close();">🔴 Record Motion Events</button>`;
               }
           });
     }
 
     var cam;
     var cameraConnected = false;
+    var modal;
     $(function () {
       document.querySelector('#wakelockStatus').innerHTML = wakeLockNotice;
+      modal = new tingle.modal();
 
       var host = location.hostname + ":" + location.port;
       
@@ -112,21 +114,6 @@
   <video id="wakelock" loop>
     <source src="js/Wakelock/wakelock.webm" type="video/mp4" />
   </video>
-
-    <!-- micromodal.js -->
-    <div class="modal micromodal-slide" id="dialog" aria-hidden="true">
-        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-            <header class="modal__header">
-                <h2 class="modal__title" id="dialog-title"></h2>
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close></button>
-            </header>
-            <main class="modal__content" id="dialog-content"></main>
-            <footer class="modal__footer" style="text-align: center">
-            </footer>
-        </div>
-        </div>
-    </div>
 </body>
 
 </html>
