@@ -47,6 +47,7 @@ func (rec *Recorder) checkFfmpeg() bool {
 
 func (rec *Recorder) maintenance(folder string) {
 	rec.IsFreeingSpace.Lock()
+	defer rec.IsFreeingSpace.Unlock()
 	usage := du.NewDiskUsage(folder)
 	freeSpace := usage.Available()
 	if usage.Available() > rec.MinFreeSpace {
@@ -58,7 +59,6 @@ func (rec *Recorder) maintenance(folder string) {
 		usage = du.NewDiskUsage(folder)
 		freeSpace = usage.Available()
 	}
-	rec.IsFreeingSpace.Unlock()
 }
 
 func (rec *Recorder) deleteOldest(folder string, freeSpace uint64) {

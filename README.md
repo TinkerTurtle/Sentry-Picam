@@ -14,7 +14,7 @@ Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https
 * Raspberry Pi Camera Module v2 (others not tested)
 
 ## Prerequisite Software
-* raspivid  - This should already be installed if using Raspberry Pi OS.
+* raspivid  - This required for motion detection since raspivid provides motion vectors
 * ffmpeg    - This is only required for custom triggers and reviewing recordings.
 
 ## Quick Setup
