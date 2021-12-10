@@ -11,13 +11,14 @@ Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https
 
 ## Minimum Hardware Requirements
 * Raspberry Pi Zero
-* Raspberry Pi Camera Module v2 (others not tested)
+* Raspberry Pi Camera Module v2
 
 ## Prerequisite Software
-* raspivid  - This required for motion detection since raspivid provides motion vectors
+* raspivid  - This required for motion vector data
 * ffmpeg    - This is only required for custom triggers and reviewing recordings.
 
 ## Quick Setup
+* Ensure camera is enabled in raspi-config
 ```
 git clone https://github.com/TinkerTurtle/sentry-picam
 cd sentry-picam

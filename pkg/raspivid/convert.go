@@ -39,6 +39,7 @@ func (conv *Converter) convert(folder string) {
 				"ffmpeg", "-y",
 				"-ss", "3",
 				"-i", folder+name+".mp4",
+				"-vf", "scale=600:-1",
 				"-qscale:v", "16",
 				"-frames:v", "1",
 				folder+name+".jpg",
