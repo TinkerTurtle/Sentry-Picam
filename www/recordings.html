@@ -19,7 +19,7 @@
       }
     }
 
-    function showVideos(data) {
+    function showVideoList(data) {
         if(data == null) {
             document.querySelector('#body').innerHTML = '🤷 No recorded videos';
             return;
@@ -59,11 +59,15 @@
             });
     }
 
+    function getFilename(path) {
+        return path.split('/')[1];
+    }
+
     var currId = 0;
     function showVideo(file) {
         currId = videoList.indexOf(file);
         modal.setContent(`
-            <h1 style="margin-top: 0">${file}</h1>
+            <h1 style="margin-top: 0">${getFilename(file)}</h1>
             <button class="modal__btn" style="position: absolute" onclick="deleteVideo('${file}')">🗑️</button>
             <video controls autoplay style="width: 80%; display: block; margin: auto; border: 2px solid white">
                 <source src="recordings/${file}.mp4" type="video/mp4"/>
@@ -149,14 +153,15 @@
         let chart = new dc.BarChart('#chart');
         let data = [];
         for(let i in videoList) {
-            let year = parseInt(videoList[i].substr(0, 4));
-            let month = parseInt(videoList[i].substr(5, 2));
-            let day = parseInt(videoList[i].substr(8, 2));
-            let hour = parseInt(videoList[i].substr(11, 2));
+            let filename = getFilename(videoList[i]);
+            let year = parseInt(filename.substr(0, 4));
+            let month = parseInt(filename.substr(5, 2));
+            let day = parseInt(filename.substr(8, 2));
+            let hour = parseInt(filename.substr(11, 2));
             let date = new Date(year, month - 1, day);
 
             let t = {};
-            t.videoID = videoList[i];
+            t.videoID = filename;
             t.hour = hour;
             t.weekday = date.toLocaleString(window.navigator.language, {weekday: 'short'});
             data.push(t);
@@ -185,7 +190,7 @@
             .then(data => {
                 data.sort();
                 data.reverse();
-                showVideos(data);
+                showVideoList(data);
             });
 
         fetch('./api/videos/cleanup', {method: 'DELETE'});

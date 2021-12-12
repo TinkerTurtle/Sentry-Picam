@@ -45,12 +45,13 @@ func (rec *Recorder) checkFfmpeg() bool {
 	return rec.hasFfmpeg
 }
 
-func (rec *Recorder) maintenance(folder string) {
+func (rec *Recorder) Maintenance(folder string) {
 	rec.IsFreeingSpace.Lock()
 	defer rec.IsFreeingSpace.Unlock()
 	usage := du.NewDiskUsage(folder)
 	freeSpace := usage.Available()
-	if usage.Available() > rec.MinFreeSpace {
+
+	if freeSpace > rec.MinFreeSpace {
 		return
 	}
 
@@ -62,20 +63,34 @@ func (rec *Recorder) maintenance(folder string) {
 }
 
 func (rec *Recorder) deleteOldest(folder string, freeSpace uint64) {
-	files, err := os.ReadDir(folder)
+	folders, err := os.ReadDir(folder)
 	if err != nil {
 		return
 	}
 
-	for _, f := range files {
-		extension := filepath.Ext(strings.ToLower(f.Name()))
-		name := strings.TrimSuffix(filepath.Base(f.Name()), filepath.Ext(f.Name()))
+	for _, f := range folders {
+		if f.IsDir() {
+			files, err := os.ReadDir(folder + f.Name())
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		if extension == ".mp4" {
-			os.Remove(folder + name + ".mp4")
-			os.Remove(folder + name + ".jpg")
-			log.Println("Low free space (" + strconv.FormatUint(freeSpace/1024, 10) + " KiB free). Deleted oldest recording: " + name)
-			return
+			if len(files) == 0 {
+				os.Remove(folder + f.Name())
+				return
+			}
+
+			for _, v := range files {
+				extension := filepath.Ext(strings.ToLower(v.Name()))
+				name := strings.TrimSuffix(filepath.Base(v.Name()), filepath.Ext(v.Name()))
+
+				if extension == ".mp4" {
+					os.Remove(folder + f.Name() + "/" + name + ".mp4")
+					os.Remove(folder + f.Name() + "/" + name + ".jpg")
+					log.Println("Low free space (" + strconv.FormatUint(freeSpace/1024, 10) + " KiB free). Deleted oldest recording: " + name)
+					return
+				}
+			}
 		}
 	}
 }
@@ -130,7 +145,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 				startedFile = false
 
 				f.Close()
-				go rec.maintenance(folderpath)
+				go rec.Maintenance(folderpath)
 			}
 		}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,8 +17,8 @@ type RecordingList struct {
 	Folder string
 }
 
-func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Request) {
-	files, err := os.ReadDir(rec.Folder)
+func getFiles(folder string) []string {
+	files, err := os.ReadDir(folder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,11 +29,30 @@ func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Req
 		name := strings.TrimSuffix(filepath.Base(f.Name()), filepath.Ext(f.Name()))
 
 		if extension == ".jpg" {
-			recordings = append(recordings, name)
+			s := strings.Split(f.Name(), "-")
+			newFolder := fmt.Sprintf("%s-%s/", s[0], s[1])
+			recordings = append(recordings, newFolder+name)
+		}
+	}
+
+	return recordings
+}
+
+func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Request) {
+	files, err := os.ReadDir(rec.Folder)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var recordings []string
+	for _, f := range files {
+		if f.IsDir() && f.Name() != "deleteme" && f.Name() != "raw" {
+			recordings = append(recordings, getFiles(rec.Folder+f.Name())...)
 		}
 	}
 
 	out, _ := json.Marshal(recordings)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
 }
 

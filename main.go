@@ -331,6 +331,7 @@ func main() {
 	go camera.Start(castVideo)
 	recorder.MinFreeSpace = *minFreeSpace
 	go recorder.Init(castVideo, recordingFolder, *camera.Fps, *triggerScript)
+	go update(recordingFolder)
 
 	if *record {
 		time.AfterFunc(2*time.Second, func() { // let raspivid settle in

@@ -1,6 +1,7 @@
 package raspivid
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -24,6 +25,9 @@ func (conv *Converter) convert(folder string) {
 	for _, f := range files {
 		extension := filepath.Ext(strings.ToLower(f.Name()))
 		name := strings.TrimSuffix(filepath.Base(f.Name()), filepath.Ext(f.Name()))
+		s := strings.Split(name, "-")
+		newFolder := fmt.Sprintf("%s/%s-%s/", folder, s[0], s[1])
+		os.MkdirAll(newFolder, 0777)
 
 		if extension == ".h264" {
 			cmd := exec.Command("nice", "-19",
@@ -31,18 +35,18 @@ func (conv *Converter) convert(folder string) {
 				"-framerate", strconv.Itoa(conv.Framerate),
 				"-i", folder+"raw/"+f.Name(),
 				"-c", "copy",
-				folder+name+".mp4",
+				newFolder+name+".mp4",
 			)
 			cmd.Run()
 
 			cmd = exec.Command("nice", "-19",
 				"ffmpeg", "-y",
 				"-ss", "3",
-				"-i", folder+name+".mp4",
+				"-i", newFolder+name+".mp4",
 				"-vf", "scale=600:-1",
 				"-qscale:v", "16",
 				"-frames:v", "1",
-				folder+name+".jpg",
+				newFolder+name+".jpg",
 			)
 			cmd.Run()
 
