@@ -1,9 +1,11 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"time"
@@ -33,6 +35,9 @@ var camera raspivid.Camera
 var motion raspivid.Motion
 
 var recorder raspivid.Recorder
+
+//go:embed www
+var staticAssets embed.FS
 
 func streamVideoToWS(ws *websocket.Conn, caster *broker.Broker, quit chan bool) {
 	stream := caster.Subscribe()
@@ -359,8 +364,10 @@ func main() {
 	api.HandleFunc("/status", status.handleStatus).Methods("GET")
 
 	// static files
-	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(exDir+"/www/js"))))
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir(exDir + "/www")))
+	//r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(exDir+"/www/js"))))
+	r.PathPrefix("/recordings/").Handler(http.StripPrefix("/recordings/", http.FileServer(http.Dir(exDir+"/www/recordings"))))
+	webRoot, _ := fs.Sub(staticAssets, "www")
+	r.PathPrefix("/").Handler(http.FileServer(http.FS(webRoot)))
 
 	log.Println("HTTP Listening on " + listenPort)
 	http.ListenAndServe(listenPort, r)
