@@ -41,7 +41,8 @@
     }
 
     function deleteVideo(file) {
-        fetch('./api/videos/' + file, {method: 'DELETE'})
+        let videoID = file.split('/')[1];
+        fetch('./api/videos/' + videoID, {method: 'DELETE'})
             .then(function() {
                 nextVideo();
                 videoList.splice(videoList.indexOf(file), 1);

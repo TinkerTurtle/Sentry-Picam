@@ -62,8 +62,10 @@ func (rec *RecordingList) handleDeleteRecording(w http.ResponseWriter, r *http.R
 
 	os.MkdirAll(rec.Folder+"deleteme/", 0777)
 
-	os.Rename(rec.Folder+videoID+".mp4", rec.Folder+"deleteme/"+videoID+".mp4")
-	os.Rename(rec.Folder+videoID+".jpg", rec.Folder+"deleteme/"+videoID+".jpg")
+	s := strings.Split(videoID, "-")
+	newFolder := fmt.Sprintf("%s-%s/", s[0], s[1])
+	os.Rename(rec.Folder+newFolder+videoID+".mp4", rec.Folder+"deleteme/"+videoID+".mp4")
+	os.Rename(rec.Folder+newFolder+videoID+".jpg", rec.Folder+"deleteme/"+videoID+".jpg")
 }
 
 func (rec *RecordingList) handleDestroyRecording(w http.ResponseWriter, r *http.Request) {
