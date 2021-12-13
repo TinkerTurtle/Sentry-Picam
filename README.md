@@ -16,14 +16,13 @@ Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https
 * Raspberry Pi Camera Module v2
 
 ## Prerequisite Software
-* raspivid  - This required for motion vector data
-* ffmpeg    - This is only required for custom triggers and reviewing recordings.
+* raspivid  - Required for motion vector data
+* ffmpeg    - Used for custom triggers and video conversion/thumbnails
 
 ## Quick Setup
 * Ensure camera is enabled in raspi-config
 ```
-git clone https://github.com/TinkerTurtle/sentry-picam
-cd sentry-picam
+wget https://github.com/TinkerTurtle/Sentry-Picam/releases/latest/download/sentry-picam
 ./sentry-picam
 ```
 
@@ -44,6 +43,8 @@ To View options:
 3. Use "Edit Detection Sectors" in the web UI to specify areas where motion detection should be triggered.
 
 4. Set up auto start:
+    
+    Download and edit the sentry-picam.service file.
     ```
     sudo cp sentry-picam.service /etc/systemd/system/
     sudo systemctl enable sentry-picam
