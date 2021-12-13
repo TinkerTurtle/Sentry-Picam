@@ -4,6 +4,8 @@
 
 Sentry-Picam is a simple wildlife / security camera solution for the Raspberry Pi Zero W, providing 1080p/30fps motion activated H.264 video capture. The built in web interface makes it easy to review video clips and identify the busiest times of day.
 
+Recordings will be kept as long as there's enough available space. 1 GiB of free space will be maintained by default.
+
 Motion detection in Sentry-Picam uses vectors provided by RaspiVid's video pipeline, enabling performant and effective supression of video noise.
 
 Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https://github.com/raspberrypi/userland/blob/master/host_applications/linux/apps/raspicam/RaspiVid.c), the Pi Zero W hardware can also stream live video to multiple devices with a ~300ms delay over Wifi.
