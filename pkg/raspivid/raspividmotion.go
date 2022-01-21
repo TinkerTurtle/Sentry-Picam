@@ -228,6 +228,27 @@ func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVecto
 	return blocksTriggered
 }
 
+// triggeredEdge checks if any sectors with motion are not on the edge of the frame
+func (c *Motion) triggeredNonEdge(frame *[]motionVector) bool {
+	motionWidth := c.Width / c.BlockWidth
+	for i, v := range *frame {
+		if v.X != 0 {
+			if i <= motionWidth { // top of frame
+				continue
+			} else if i > len(*frame)-motionWidth { // bottom of frame
+				continue
+			} else if i%motionWidth == 0 { // left of frame
+				continue
+			} else if (i+1)%motionWidth == 0 { // right of frame
+				continue
+			} else {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Detect parses motion vectors provided by raspivid
 // Lower senseThreshold value increases the sensitivity to motion.
 func (c *Motion) Detect(caster *broker.Broker) {
@@ -274,7 +295,11 @@ func (c *Motion) Detect(caster *broker.Broker) {
 				}
 				c.condenseBlocksDirection(&currCondensedBlocks, &currMacroBlocks)
 				if c.publishParsedBlocks(caster, &currCondensedBlocks) > 0 {
-					c.recorder.StopTime = time.Now().Add(time.Second * 5)
+					if c.triggeredNonEdge(&currCondensedBlocks) {
+						c.recorder.StopTime = time.Now().Add(time.Second * 10)
+					} else {
+						c.recorder.StopTime = time.Now().Add(time.Second * 5)
+					}
 				}
 
 				//binary.Write(f, binary.LittleEndian, &currMacroBlocks) // write to file
