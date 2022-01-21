@@ -27,7 +27,7 @@ import (
 const ProductName = "sentry-picam"
 
 // ProductVersion #
-const ProductVersion = "0.7.0"
+const ProductVersion = "0.7.1"
 
 var clients = make(map[*websocket.Conn]bool)
 var clientsMotion = make(map[*websocket.Conn]bool)
