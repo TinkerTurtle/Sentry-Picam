@@ -55,12 +55,12 @@ To View options:
 
     Sentry-picam runs your program after generating a thumbnail, and passes in the video/thumbnail name as an argument to your program. Your program will need to append the .mp4 file extension to access the video, or .jpg to access the thumbnail. Recordings are stored in ```./www/recordings/```
     ```
-    ./sentry-picam -run my_script.sh
+    ./sentry-picam -run example_script.sh
     ```
 
 6. Files discarded from the web interface may be recovered from the folder ```./www/recordings/deleteme/```. The web interface will occasionally empty this folder, starting with recordings over 7 days old.
 
-## Compiling from source code from Windows for a Raspberry Pi Zero
+## Compiling from Windows for a Raspberry Pi Zero
 ```
 git clone https://github.com/TinkerTurtle/sentry-picam
 cd sentry-picam

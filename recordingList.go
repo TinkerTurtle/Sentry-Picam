@@ -38,8 +38,8 @@ func getFiles(folder string) []string {
 	return recordings
 }
 
-func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Request) {
-	files, err := os.ReadDir(rec.Folder)
+func getAllFiles(folder string) []string {
+	files, err := os.ReadDir(folder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,11 +47,15 @@ func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Req
 	var recordings []string
 	for _, f := range files {
 		if f.IsDir() && f.Name() != "deleteme" && f.Name() != "raw" {
-			recordings = append(recordings, getFiles(rec.Folder+f.Name())...)
+			recordings = append(recordings, getFiles(folder+f.Name())...)
 		}
 	}
 
-	out, _ := json.Marshal(recordings)
+	return recordings
+}
+
+func (rec *RecordingList) handleRecordingList(w http.ResponseWriter, r *http.Request) {
+	out, _ := json.Marshal(getAllFiles(rec.Folder))
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
 }
