@@ -246,7 +246,7 @@ func (c *Motion) checkHighlight(frame *[]motionVector) int {
 	for i, v := range *frame {
 		currDistX := abs(i%c.mColCount - c.mCenterX)
 		currDistY := abs(i/c.mColCount - c.mCenterY)
-		if v.X != 0 && c.highlightDistX > currDistX && c.highlightDistY > currDistY {
+		if v.X != 0 && c.highlightDistX >= currDistX && c.highlightDistY >= currDistY {
 			c.highlightDistX = currDistX
 			c.highlightDistY = currDistY
 			c.recorder.HighlightTime = time.Now()
@@ -296,6 +296,9 @@ func (c *Motion) Detect(caster *broker.Broker) {
 	c.mColCount = c.usableCols / c.BlockWidth
 	c.mCenterX = c.rowCount / c.BlockWidth / 2
 	c.mCenterY = c.colCount / c.BlockWidth / 2
+
+	c.highlightDistX = c.rowCount
+	c.highlightDistY = c.colCount
 
 	ignoredFrames := 0
 
