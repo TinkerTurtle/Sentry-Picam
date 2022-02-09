@@ -365,6 +365,7 @@ func main() {
 
 	// static files
 	//r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(exDir+"/www/js"))))
+	os.MkdirAll(recordingFolder, 0700)
 	r.PathPrefix("/recordings/").Handler(http.StripPrefix("/recordings/", http.FileServer(http.Dir(exDir+"/www/recordings"))))
 	webRoot, _ := fs.Sub(staticAssets, "www")
 	r.PathPrefix("/").Handler(http.FileServer(http.FS(webRoot)))
