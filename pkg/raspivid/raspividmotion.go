@@ -37,6 +37,16 @@ type Motion struct {
 	output          []byte
 	recorder        *Recorder
 	RecordingFolder string
+
+	rowCount       int
+	colCount       int
+	mColCount      int
+	mCenterX       int
+	mCenterY       int
+	usableCols     int
+	highlightStart time.Time
+	highlightDistX int
+	highlightDistY int
 }
 
 // motionVector from raspivid.
@@ -128,19 +138,15 @@ func (c *Motion) ApplyPreviousMask() {
 // condenseBlocksDirection takes a blockWidth * blockWidth average of macroblocks from buf and stores the
 // condensed result into frame
 func (c *Motion) condenseBlocksDirection(frame *[]motionVector, buf *[]motionVector) {
-	rowCount := c.Height / 16
-	colCount := (c.Width + 16) / 16
-	usableCols := colCount - 1
-
-	mV := make([]mVhelper, usableCols/c.BlockWidth)
+	mV := make([]mVhelper, c.usableCols/c.BlockWidth)
 	i := 0
 	compressedIndex := 0
 
-	for x := 0; x < rowCount; x++ {
+	for x := 0; x < c.rowCount; x++ {
 		blk := 1
 		blkIndex := 0
-		for y := 0; y < colCount; y++ {
-			if y < usableCols {
+		for y := 0; y < c.colCount; y++ {
+			if y < c.usableCols {
 				mV[blkIndex].add((*buf)[i])
 			}
 			if blk == c.BlockWidth {
@@ -228,6 +234,28 @@ func (c *Motion) publishParsedBlocks(caster *broker.Broker, frame *[]motionVecto
 	return blocksTriggered
 }
 
+func abs(x int) int {
+	if x > 0 {
+		return x
+	}
+	return -x
+}
+
+func (c *Motion) checkHighlight(frame *[]motionVector) int {
+	blocksTriggered := 0
+	for i, v := range *frame {
+		currDistX := abs(i%c.mColCount - c.mCenterX)
+		currDistY := abs(i/c.mColCount - c.mCenterY)
+		if v.X != 0 && c.highlightDistX > currDistX && c.highlightDistY > currDistY {
+			c.highlightDistX = currDistX
+			c.highlightDistY = currDistY
+			c.recorder.HighlightTime = time.Now()
+		}
+	}
+
+	return blocksTriggered
+}
+
 // triggeredEdge checks if any sectors with motion are not on the edge of the frame
 func (c *Motion) triggeredNonEdge(frame *[]motionVector) bool {
 	motionWidth := c.Width / c.BlockWidth
@@ -262,6 +290,13 @@ func (c *Motion) Detect(caster *broker.Broker) {
 	currCondensedBlocks := make([]motionVector, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
 	c.output = make([]byte, numUsableMacroblocks/(c.BlockWidth*c.BlockWidth))
 
+	c.rowCount = c.Height / 16
+	c.colCount = (c.Width + 16) / 16
+	c.usableCols = c.colCount - 1
+	c.mColCount = c.usableCols / c.BlockWidth
+	c.mCenterX = c.rowCount / c.BlockWidth / 2
+	c.mCenterY = c.colCount / c.BlockWidth / 2
+
 	ignoredFrames := 0
 
 	buf := make([]byte, 1024)
@@ -295,6 +330,14 @@ func (c *Motion) Detect(caster *broker.Broker) {
 				}
 				c.condenseBlocksDirection(&currCondensedBlocks, &currMacroBlocks)
 				if c.publishParsedBlocks(caster, &currCondensedBlocks) > 0 {
+					c.checkHighlight(&currCondensedBlocks)
+					if time.Now().After(c.recorder.StopTime) {
+						c.highlightStart = time.Now()
+
+						// reset highlight distance
+						c.highlightDistX = c.rowCount
+						c.highlightDistY = c.colCount
+					}
 					if c.triggeredNonEdge(&currCondensedBlocks) {
 						c.recorder.StopTime = time.Now().Add(time.Second * 10)
 					} else {

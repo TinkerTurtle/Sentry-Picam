@@ -8,12 +8,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Converter struct {
-	Framerate     int
-	TriggerScript string
+	Framerate      int
+	TriggerScript  string
+	highlightCache map[string]float64
+	Mutx           sync.Mutex
+}
+
+func (conv *Converter) CacheItem(filename string, time float64) {
+	conv.highlightCache[filename] = time
 }
 
 func (conv *Converter) convert(folder string) {
@@ -39,9 +46,14 @@ func (conv *Converter) convert(folder string) {
 			)
 			cmd.Run()
 
+			conv.Mutx.Lock()
+			skip, ok := conv.highlightCache[name]
+			if !ok {
+				skip = 3
+			}
 			cmd = exec.Command("nice", "-19",
 				"ffmpeg", "-y",
-				"-ss", "3",
+				"-ss", fmt.Sprintf("%f", skip),
 				"-i", newFolder+name+".mp4",
 				"-vf", "scale=600:-1",
 				"-qscale:v", "16",
@@ -49,6 +61,8 @@ func (conv *Converter) convert(folder string) {
 				newFolder+name+".jpg",
 			)
 			cmd.Run()
+			delete(conv.highlightCache, name)
+			conv.Mutx.Unlock()
 
 			os.Remove(folder + "raw/" + f.Name())
 
@@ -63,6 +77,10 @@ func (conv *Converter) convert(folder string) {
 			}
 		}
 	}
+}
+
+func (conv *Converter) Init() {
+	conv.highlightCache = make(map[string]float64)
 }
 
 func (conv *Converter) Start(rec *Recorder, folder string) {

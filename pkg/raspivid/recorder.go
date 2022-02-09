@@ -19,6 +19,7 @@ import (
 type Recorder struct {
 	RequestedRecord bool
 	StopTime        time.Time
+	HighlightTime   time.Time
 	hasFfmpeg       bool
 	MinFreeSpace    uint64
 	IsFreeingSpace  sync.Mutex
@@ -40,6 +41,8 @@ func (rec *Recorder) checkFfmpeg() bool {
 	_, err := exec.LookPath("ffmpeg")
 	if err == nil {
 		rec.hasFfmpeg = true
+	} else {
+		log.Println("ffmpeg not found - no thumbnails will be created")
 	}
 
 	return rec.hasFfmpeg
@@ -99,11 +102,12 @@ func (rec *Recorder) deleteOldest(folder string, freeSpace uint64) {
 // When recording is triggered by (rec.StopTime > now), up to numHeaders Iframes will be
 // saved before the trigger
 func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate int, triggerScript string) {
-	os.MkdirAll(folderpath+"raw/", 0777)
+	os.MkdirAll(folderpath+"raw/", 0700)
 
 	converter := Converter{}
 	converter.Framerate = framerate
 	converter.TriggerScript = triggerScript
+	converter.Init()
 	if rec.checkFfmpeg() {
 		go converter.Start(rec, folderpath)
 	}
@@ -116,6 +120,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 
 	var f *os.File
 	var fileName string
+	var startTime time.Time
 
 	buf := [][]byte{}
 	i := 0
@@ -128,6 +133,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 				if !startedFile {
 					fileName, fileCounter = getFilename(fileName, fileCounter)
 					f, _ = os.Create(folderpath + "raw/" + fileName + extension)
+					startTime = time.Now()
 				}
 
 				startedFile = true
@@ -142,6 +148,11 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 				numHeaders = 0
 				i = 0
 			} else if startedFile {
+				go func() {
+					converter.Mutx.Lock()
+					defer converter.Mutx.Unlock()
+					converter.CacheItem(fileName, rec.HighlightTime.Sub(startTime).Seconds()+2) // +2 since we record 2 preceding seconds
+				}()
 				startedFile = false
 
 				f.Close()
