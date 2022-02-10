@@ -241,6 +241,10 @@ func abs(x int) int {
 }
 
 func (c *Motion) checkHighlight(frame *[]motionVector) {
+	if c.highlightDistX == 0 && c.highlightDistY == 0 {
+		return
+	}
+
 	for i, v := range *frame {
 		currDistX := abs(i%c.mColCount - c.mCenterX)
 		currDistY := abs(i/c.mColCount - c.mCenterY)
@@ -253,18 +257,17 @@ func (c *Motion) checkHighlight(frame *[]motionVector) {
 }
 
 // triggeredEdge checks if any sectors with motion are not on the edge of the frame
-func (c *Motion) triggeredNonEdge(frame *[]motionVector) bool {
-	motionWidth := c.Width / c.BlockWidth
+func (c *Motion) triggeredOnlyNonEdge(frame *[]motionVector) bool {
 	for i, v := range *frame {
 		if v.X != 0 {
-			if i <= motionWidth { // top of frame
-				continue
-			} else if i > len(*frame)-motionWidth { // bottom of frame
-				continue
-			} else if i%motionWidth == 0 { // left of frame
-				continue
-			} else if (i+1)%motionWidth == 0 { // right of frame
-				continue
+			if i <= c.mColCount*2 { // top of frame (first row blank?)
+				return false
+			} else if i > len(*frame)-c.mColCount { // bottom of frame
+				return false
+			} else if i%c.mColCount == 0 { // left of frame
+				return false
+			} else if (i+1)%c.mColCount == 0 { // right of frame
+				return false
 			} else {
 				return true
 			}
@@ -335,7 +338,7 @@ func (c *Motion) Detect(caster *broker.Broker) {
 						c.highlightDistX = c.rowCount
 						c.highlightDistY = c.colCount
 					}
-					if c.triggeredNonEdge(&currCondensedBlocks) {
+					if c.triggeredOnlyNonEdge(&currCondensedBlocks) {
 						c.recorder.StopTime = time.Now().Add(time.Second * 10)
 					} else {
 						c.recorder.StopTime = time.Now().Add(time.Second * 5)

@@ -27,7 +27,7 @@ import (
 const ProductName = "sentry-picam"
 
 // ProductVersion #
-const ProductVersion = "0.7.2"
+const ProductVersion = "0.7.3"
 
 var clients = make(map[*websocket.Conn]bool)
 var clientsMotion = make(map[*websocket.Conn]bool)
@@ -361,6 +361,7 @@ func main() {
 	api.HandleFunc("/videos", recordingList.handleRecordingList).Methods("GET")
 	api.HandleFunc("/videos/cleanup", recordingList.handleDestroyRecording).Methods("DELETE")
 	api.HandleFunc("/videos/{videoID}", recordingList.handleDeleteRecording).Methods("DELETE")
+	//api.HandleFunc("/videos/{videoID}/thumbnail", recordingList.handleThumbnailUpdate).Methods("POST")
 	api.HandleFunc("/status", status.handleStatus).Methods("GET")
 
 	// static files
