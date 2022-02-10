@@ -52,7 +52,8 @@
 
     function deleteAll() {
         let promises = videoList.map(video => {
-            return fetch('./api/videos/' + video, {method: 'DELETE'})
+            let videoID = video.split('/')[1];
+            return fetch('./api/videos/' + videoID, {method: 'DELETE'})
         });
         Promise.all(promises)
             .then(function() {

@@ -44,7 +44,6 @@ type Motion struct {
 	mCenterX       int
 	mCenterY       int
 	usableCols     int
-	highlightStart time.Time
 	highlightDistX int
 	highlightDistY int
 }
@@ -241,8 +240,7 @@ func abs(x int) int {
 	return -x
 }
 
-func (c *Motion) checkHighlight(frame *[]motionVector) int {
-	blocksTriggered := 0
+func (c *Motion) checkHighlight(frame *[]motionVector) {
 	for i, v := range *frame {
 		currDistX := abs(i%c.mColCount - c.mCenterX)
 		currDistY := abs(i/c.mColCount - c.mCenterY)
@@ -252,8 +250,6 @@ func (c *Motion) checkHighlight(frame *[]motionVector) int {
 			c.recorder.HighlightTime = time.Now()
 		}
 	}
-
-	return blocksTriggered
 }
 
 // triggeredEdge checks if any sectors with motion are not on the edge of the frame
@@ -335,8 +331,6 @@ func (c *Motion) Detect(caster *broker.Broker) {
 				if c.publishParsedBlocks(caster, &currCondensedBlocks) > 0 {
 					c.checkHighlight(&currCondensedBlocks)
 					if time.Now().After(c.recorder.StopTime) {
-						c.highlightStart = time.Now()
-
 						// reset highlight distance
 						c.highlightDistX = c.rowCount
 						c.highlightDistY = c.colCount

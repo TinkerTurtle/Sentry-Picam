@@ -25,16 +25,15 @@ type Recorder struct {
 	IsFreeingSpace  sync.Mutex
 }
 
-func getFilename(lastName string, counter int) (string, int) {
+func getFilename(lastName string) string {
 	fileFormat := "%d-%02d-%02d-%02d%02d"
 	now := time.Now()
 	newFilename := fmt.Sprintf(fileFormat, now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute())
 	if newFilename == lastName {
-		counter++
-		return newFilename + fmt.Sprintf("_%02d", counter), counter
+		return newFilename + fmt.Sprintf("_%02d", now.Second())
 	}
 
-	return fmt.Sprintf(fileFormat+"_%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0), 0
+	return fmt.Sprintf(fileFormat+"_%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second())
 }
 
 func (rec *Recorder) checkFfmpeg() bool {
@@ -107,16 +106,15 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 	converter := Converter{}
 	converter.Framerate = framerate
 	converter.TriggerScript = triggerScript
-	converter.Init()
+	converter.Init(rec, folderpath)
 	if rec.checkFfmpeg() {
-		go converter.Start(rec, folderpath)
+		go converter.convertFolder(folderpath)
 	}
 
 	extension := ".h264"
 	stream := caster.Subscribe()
 	defer caster.Unsubscribe(stream)
 	numHeaders := 0
-	fileCounter := 0
 
 	var f *os.File
 	var fileName string
@@ -124,6 +122,7 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 
 	buf := [][]byte{}
 	i := 0
+	frameOffset := 0
 	startedFile := false
 	for {
 		x := <-stream
@@ -131,9 +130,10 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 		if rec.RequestedRecord {
 			if time.Now().Before(rec.StopTime) {
 				if !startedFile {
-					fileName, fileCounter = getFilename(fileName, fileCounter)
+					fileName = getFilename(fileName)
 					f, _ = os.Create(folderpath + "raw/" + fileName + extension)
 					startTime = time.Now()
+					frameOffset = i
 				}
 
 				startedFile = true
@@ -148,15 +148,15 @@ func (rec *Recorder) Init(caster *broker.Broker, folderpath string, framerate in
 				numHeaders = 0
 				i = 0
 			} else if startedFile {
-				go func() {
-					converter.Mutx.Lock()
-					defer converter.Mutx.Unlock()
-					converter.CacheItem(fileName, rec.HighlightTime.Sub(startTime).Seconds()+2) // +2 since we record 2 preceding seconds
-				}()
-				startedFile = false
-
 				f.Close()
+				go func(highlightTime time.Time, startTime time.Time, frameOffset int) {
+					converter.CacheItem(fileName, highlightTime.Sub(startTime).Seconds()+float64(frameOffset)/float64(framerate)-.25)
+					converter.convertFile(fileName)
+				}(rec.HighlightTime, startTime, frameOffset)
+
 				go rec.Maintenance(folderpath)
+
+				startedFile = false
 			}
 		}
 
