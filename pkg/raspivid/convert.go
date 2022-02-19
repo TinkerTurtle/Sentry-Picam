@@ -54,7 +54,7 @@ func (conv *Converter) convertFile(name string) {
 	delete(conv.highlightCache, name)
 
 	os.Remove(conv.folder + "raw/" + name + ".h264")
-	log.Println("File written: ", name, "Offset:", skip)
+	//log.Println("File written: ", name, "Offset:", skip)
 
 	if conv.TriggerScript != "" {
 		cmd = exec.Command("nice", "-19",

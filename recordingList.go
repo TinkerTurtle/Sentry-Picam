@@ -82,7 +82,7 @@ func (rec *RecordingList) handleDestroyRecording(w http.ResponseWriter, r *http.
 		s := strings.Split(f.Name(), "_")
 
 		videoTime, _ := time.Parse("2006-01-02-1504", s[0])
-		if time.Now().Add(-time.Hour * 24 * 7).After(videoTime) {
+		if time.Now().Add(-time.Hour).After(videoTime) {
 			os.Remove(rec.Folder + "deleteme/" + f.Name())
 		}
 	}
