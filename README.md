@@ -16,7 +16,7 @@ Thanks to [Broadway](https://github.com/mbebenita/Broadway) and [RaspiVid](https
 * Raspberry Pi Camera Module v2
 
 ## Prerequisite Software
-* raspivid  - Required for motion vector data
+* raspivid  - Required for motion vector data. Available in Raspberry Pi OS Debian version: 10 (buster).
 * ffmpeg    - Used for custom triggers and video conversion/thumbnails
 
 ## Quick Setup
